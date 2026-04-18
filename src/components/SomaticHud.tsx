@@ -1,7 +1,11 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useMivta } from '../hooks/useMivta'
-import type { Direction, Vowel } from '../engines/metronomeEngine'
+import type {
+  BreathPhase,
+  Direction,
+  Vowel,
+} from '../engines/metronomeEngine'
 
 const BLACK = '#050505'
 const WHITE = '#FFFFFF'
@@ -80,8 +84,13 @@ const centerZoneStyle: CSSProperties = {
   position: 'relative',
 }
 
-const directionWrapperStyle = (dx: string, dy: string): CSSProperties => ({
-  transform: `translate(${dx}, ${dy})`,
+const directionWrapperStyle = (
+  dx: string,
+  dy: string,
+  sx: number,
+  sy: number,
+): CSSProperties => ({
+  transform: `translate(${dx}, ${dy}) scale(${sx}, ${sy})`,
   transition: 'transform 200ms ease-out',
   willChange: 'transform',
   display: 'flex',
@@ -92,6 +101,19 @@ const directionWrapperStyle = (dx: string, dy: string): CSSProperties => ({
 const forwardScalerStyle = (scale: number): CSSProperties => ({
   transform: `scale(${scale})`,
   transformOrigin: '50% 50%',
+  transition: 'transform 200ms ease-out',
+})
+
+const snapScalerStyle = (active: boolean): CSSProperties => ({
+  transform: `scale(${active ? 1.04 : 1})`,
+  transformOrigin: '50% 50%',
+  transition: 'transform 100ms ease-out',
+})
+
+const breathScalerStyle = (scale: number): CSSProperties => ({
+  transform: `scale(${scale})`,
+  transformOrigin: '50% 50%',
+  willChange: 'transform',
 })
 
 const coreStyle: CSSProperties = {
@@ -152,6 +174,7 @@ const controlsRowStyle: CSSProperties = {
   gap: '8px',
   flexWrap: 'wrap',
   justifyContent: 'center',
+  opacity: 0.55,
 }
 
 const devButtonStyle: CSSProperties = {
@@ -182,7 +205,7 @@ const telemetryStyle: CSSProperties = {
   fontSize: '10px',
   letterSpacing: '0.3em',
   textTransform: 'uppercase',
-  opacity: 0.75,
+  opacity: 0.45,
 }
 
 const telemetryCellStyle: CSSProperties = {
@@ -217,6 +240,20 @@ function directionTranslate(d: Direction): { dx: string; dy: string } {
   }
 }
 
+function directionStretch(d: Direction): { sx: number; sy: number } {
+  switch (d) {
+    case 'up':
+    case 'down':
+      return { sx: 0.96, sy: 1.06 }
+    case 'left':
+    case 'right':
+      return { sx: 1.06, sy: 0.96 }
+    case 'forward':
+    default:
+      return { sx: 1, sy: 1 }
+  }
+}
+
 export function SomaticHud() {
   const { running, runtime, activeStep, progress, start, pause, reset, tick } =
     useMivta()
@@ -236,11 +273,37 @@ export function SomaticHud() {
   const vowel = activeStep.vowel
 
   const { dx, dy } = directionTranslate(direction)
+  const { sx, sy } = directionStretch(direction)
   const forwardScale = direction === 'forward' ? 1.25 : 1
 
+  // Phase-flip punctuation (~100ms). Purely a local UI concern.
+  const prevPhaseRef = useRef<BreathPhase>(phase)
+  const snapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [snap, setSnap] = useState(false)
+
+  useEffect(() => {
+    if (phase !== prevPhaseRef.current) {
+      prevPhaseRef.current = phase
+      if (snapTimeoutRef.current != null) {
+        clearTimeout(snapTimeoutRef.current)
+      }
+      setSnap(true)
+      snapTimeoutRef.current = setTimeout(() => {
+        setSnap(false)
+        snapTimeoutRef.current = null
+      }, 100)
+    }
+    return () => {
+      if (snapTimeoutRef.current != null) {
+        clearTimeout(snapTimeoutRef.current)
+        snapTimeoutRef.current = null
+      }
+    }
+  }, [phase])
+
   // Breath-responsive frame geometry (SVG viewBox 0 0 100 100).
-  // Inhale: frame contracts toward the center; stroke thickens (gathering force).
-  // Exhale: frame releases outward; stroke relaxes (releasing force).
+  // Inhale: frame contracts toward the center; stroke gathers force.
+  // Exhale: frame releases outward; stroke intensifies (restrained) as it blooms.
   let frameInset: number
   let frameStroke: number
   if (phase === 'inhale') {
@@ -248,7 +311,7 @@ export function SomaticHud() {
     frameStroke = 0.6 + 1.8 * p
   } else {
     frameInset = 20 - 15 * p
-    frameStroke = 2.4 - 1.6 * p
+    frameStroke = 1.2 + 0.9 * p
   }
   const frameSize = 100 - 2 * frameInset
 
@@ -256,7 +319,12 @@ export function SomaticHud() {
   const ringR = phase === 'inhale' ? 34 - 8 * p : 26 + 8 * p
   const ringStroke = phase === 'inhale' ? 0.4 + 0.8 * p : 1.2 - 0.6 * p
 
-  // Cyan glow intensifies only on exhale (release).
+  // Core scale — progress-driven, no CSS transition.
+  // Inhale contracts 1.00 -> 0.95 (tension). Exhale blooms 0.95 -> 1.06 (emanation).
+  const breathScale =
+    phase === 'inhale' ? 1 - 0.05 * p : 0.95 + 0.11 * p
+
+  // Cyan glow intensifies only on exhale (restrained release).
   const glow =
     phase === 'exhale'
       ? `drop-shadow(0 0 ${1 + 3 * p}vmin rgba(0,255,255,${(
@@ -264,6 +332,10 @@ export function SomaticHud() {
           0.42 * p
         ).toFixed(3)}))`
       : 'drop-shadow(0 0 0 rgba(0,0,0,0))'
+
+  // Snap-only attribute overrides (discrete, applied to SVG attrs).
+  const frameStrokeRendered = frameStroke + (snap ? 0.6 : 0)
+  const ringOpacityRendered = snap ? 1 : 0.6
 
   return (
     <div style={hudStyle}>
@@ -284,48 +356,64 @@ export function SomaticHud() {
       </section>
 
       <section style={centerZoneStyle}>
-        <div style={directionWrapperStyle(dx, dy)}>
+        <div style={directionWrapperStyle(dx, dy, sx, sy)}>
           <div style={forwardScalerStyle(forwardScale)}>
-            <svg
-              viewBox="0 0 100 100"
-              preserveAspectRatio="xMidYMid meet"
-              role="img"
-              aria-label={`Ritual core: vowel ${vowel}, direction ${direction}, phase ${phase}`}
-              style={{ ...coreStyle, filter: glow }}
-            >
-              <rect
-                x={frameInset}
-                y={frameInset}
-                width={frameSize}
-                height={frameSize}
-                fill="none"
-                stroke={WHITE}
-                strokeWidth={frameStroke}
-                vectorEffect="non-scaling-stroke"
-              />
-              <circle
-                cx={50}
-                cy={50}
-                r={ringR}
-                fill="none"
-                stroke={WHITE}
-                strokeWidth={ringStroke}
-                vectorEffect="non-scaling-stroke"
-                opacity={0.6}
-              />
-              <text
-                x={50}
-                y={50}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill={WHITE}
-                fontFamily={MONO}
-                fontSize={11}
-                fontWeight={500}
-              >
-                {vowel.toUpperCase()}
-              </text>
-            </svg>
+            <div style={snapScalerStyle(snap)}>
+              <div style={breathScalerStyle(breathScale)}>
+                <svg
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="xMidYMid meet"
+                  role="img"
+                  aria-label={`Ritual core: vowel ${vowel}, direction ${direction}, phase ${phase}`}
+                  style={{ ...coreStyle, filter: glow }}
+                >
+                  <rect
+                    x={frameInset}
+                    y={frameInset}
+                    width={frameSize}
+                    height={frameSize}
+                    fill="none"
+                    stroke={WHITE}
+                    strokeWidth={frameStrokeRendered}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle
+                    cx={50}
+                    cy={50}
+                    r={ringR}
+                    fill="none"
+                    stroke={WHITE}
+                    strokeWidth={ringStroke}
+                    vectorEffect="non-scaling-stroke"
+                    opacity={ringOpacityRendered}
+                  />
+                  {phase === 'inhale' && (
+                    <circle
+                      cx={50}
+                      cy={50}
+                      r={ringR + 6}
+                      fill="none"
+                      stroke={WHITE}
+                      strokeWidth={0.3 + 0.9 * p}
+                      vectorEffect="non-scaling-stroke"
+                      opacity={0.35 * p}
+                    />
+                  )}
+                  <text
+                    x={50}
+                    y={50}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill={WHITE}
+                    fontFamily={MONO}
+                    fontSize={11}
+                    fontWeight={500}
+                  >
+                    {vowel.toUpperCase()}
+                  </text>
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -402,7 +490,4 @@ export function SomaticHud() {
 }
 
 export default SomaticHud
-	
-	
-	
 
