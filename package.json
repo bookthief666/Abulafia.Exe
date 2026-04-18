@@ -6,13 +6,15 @@
   "overrides": {
     "rollup": "npm:@rollup/wasm-node"
   },
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
+"scripts": {
+  "dev": "vite",
+  "build": "tsc -b && vite build",
+  "lint": "eslint .",
+  "preview": "vite preview",
+  "test": "vitest run",
+  "test:watch": "vitest"
+},
+ "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.0",
     "@types/three": "^0.184.0",
