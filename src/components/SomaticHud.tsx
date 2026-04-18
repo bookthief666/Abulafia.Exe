@@ -29,6 +29,20 @@ const VOWELS: readonly Vowel[] = [
   'qubuts',
 ]
 
+// Eight vertices around (50,50) at radius r, pointy-top (angle starts at -π/2).
+function octagonPoints(r: number): string {
+  const cx = 50
+  const cy = 50
+  const pts: string[] = []
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 4
+    const x = cx + r * Math.cos(a)
+    const y = cy + r * Math.sin(a)
+    pts.push(`${x.toFixed(3)},${y.toFixed(3)}`)
+  }
+  return pts.join(' ')
+}
+
 const hudStyle: CSSProperties = {
   backgroundColor: BLACK,
   color: WHITE,
@@ -133,7 +147,7 @@ const stripLabelStyle: CSSProperties = {
   fontFamily: MONO,
   fontSize: '10px',
   letterSpacing: '0.4em',
-  opacity: 0.5,
+  opacity: 0.35,
   textTransform: 'uppercase',
   color: WHITE,
 }
@@ -145,28 +159,28 @@ const stripStyle: CSSProperties = {
 }
 
 const cellBaseStyle: CSSProperties = {
-  border: `1px solid ${WHITE}`,
-  padding: '10px 6px',
+  padding: '6px 4px',
   textAlign: 'center',
   fontFamily: MONO,
   fontSize: '12px',
   letterSpacing: '0.24em',
   textTransform: 'uppercase',
   boxSizing: 'border-box',
+  transition: 'color 120ms ease-out, opacity 120ms ease-out',
 }
 
 const activeCellStyle: CSSProperties = {
   ...cellBaseStyle,
-  backgroundColor: CYAN,
-  borderColor: CYAN,
-  color: BLACK,
+  color: CYAN,
+  opacity: 1,
+  borderBottom: `1px solid ${CYAN}`,
 }
 
 const inactiveCellStyle: CSSProperties = {
   ...cellBaseStyle,
-  backgroundColor: BLACK,
   color: WHITE,
-  opacity: DIM_OPACITY,
+  opacity: 0.3,
+  borderBottom: '1px solid transparent',
 }
 
 const controlsRowStyle: CSSProperties = {
@@ -199,13 +213,12 @@ const telemetryStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(3, 1fr)',
   gap: '8px',
-  borderTop: '1px solid rgba(255,255,255,0.22)',
   paddingTop: '8px',
   fontFamily: MONO,
   fontSize: '10px',
   letterSpacing: '0.3em',
   textTransform: 'uppercase',
-  opacity: 0.45,
+  opacity: 0.35,
 }
 
 const telemetryCellStyle: CSSProperties = {
@@ -252,6 +265,45 @@ function directionStretch(d: Direction): { sx: number; sy: number } {
     default:
       return { sx: 1, sy: 1 }
   }
+}
+
+// Cardinal marker geometry inside the 100x100 viewBox. Each marker is a tick
+// pointing radially outward from (50,50), capped by a small square node.
+type Cardinal = 'up' | 'right' | 'down' | 'left'
+const CARDINALS: readonly Cardinal[] = ['up', 'right', 'down', 'left']
+
+function cardinalMarker(
+  c: Cardinal,
+  baseR: number,
+): { x1: number; y1: number; x2: number; y2: number; nx: number; ny: number } {
+  const tickLen = 4
+  const cx = 50
+  const cy = 50
+  let ux = 0
+  let uy = 0
+  switch (c) {
+    case 'up':
+      ux = 0
+      uy = -1
+      break
+    case 'right':
+      ux = 1
+      uy = 0
+      break
+    case 'down':
+      ux = 0
+      uy = 1
+      break
+    case 'left':
+      ux = -1
+      uy = 0
+      break
+  }
+  const x1 = cx + ux * baseR
+  const y1 = cy + uy * baseR
+  const x2 = cx + ux * (baseR + tickLen)
+  const y2 = cy + uy * (baseR + tickLen)
+  return { x1, y1, x2, y2, nx: x2, ny: y2 }
 }
 
 export function SomaticHud() {
@@ -304,20 +356,12 @@ export function SomaticHud() {
   // Breath-responsive frame geometry (SVG viewBox 0 0 100 100).
   // Inhale: frame contracts toward the center; stroke gathers force.
   // Exhale: frame releases outward; stroke intensifies (restrained) as it blooms.
-  let frameInset: number
   let frameStroke: number
   if (phase === 'inhale') {
-    frameInset = 5 + 15 * p
     frameStroke = 0.6 + 1.8 * p
   } else {
-    frameInset = 20 - 15 * p
     frameStroke = 1.2 + 0.9 * p
   }
-  const frameSize = 100 - 2 * frameInset
-
-  // Inner ring — counter-pulse, keeps the Bindu legible.
-  const ringR = phase === 'inhale' ? 34 - 8 * p : 26 + 8 * p
-  const ringStroke = phase === 'inhale' ? 0.4 + 0.8 * p : 1.2 - 0.6 * p
 
   // Core scale — progress-driven, no CSS transition.
   // Inhale contracts 1.00 -> 0.95 (tension). Exhale blooms 0.95 -> 1.06 (emanation).
@@ -336,6 +380,43 @@ export function SomaticHud() {
   // Snap-only attribute overrides (discrete, applied to SVG attrs).
   const frameStrokeRendered = frameStroke + (snap ? 0.6 : 0)
   const ringOpacityRendered = snap ? 1 : 0.6
+
+  // Continuous 0..1 across a full inhale+exhale cycle — drives orbital rotation
+  // across the phase boundary without a discontinuity in direction.
+  const cycleT = phase === 'inhale' ? 0.5 * p : 0.5 + 0.5 * p
+  const ringAngleA = 360 * cycleT
+  const ringAngleB = -360 * cycleT
+
+  // Orbital radii: tighten on inhale, expand on exhale.
+  const orbitOuterR = phase === 'inhale' ? 38 - 4 * p : 34 + 4 * p
+  const orbitInnerR = phase === 'inhale' ? 26 - 3 * p : 23 + 3 * p
+
+  // Dash arrays: compress on inhale, bloom on exhale.
+  const dashA =
+    phase === 'inhale'
+      ? `${(6 - 4 * p).toFixed(2)} ${(3 - 1.5 * p).toFixed(2)}`
+      : `${(2 + 4 * p).toFixed(2)} ${(1.5 + 1.5 * p).toFixed(2)}`
+  const dashB =
+    phase === 'inhale'
+      ? `${(3 - 2 * p).toFixed(2)} ${(2 - 1 * p).toFixed(2)}`
+      : `${(1 + 2 * p).toFixed(2)} ${(1 + 1 * p).toFixed(2)}`
+
+  // Containment octagon radius — breathes with phase.
+  const octR = phase === 'inhale' ? 45 - 3 * p : 42 + 3 * p
+
+  // Cyan intensity for the active directional marker — burns brighter on exhale.
+  const markerIntensity =
+    direction === 'forward'
+      ? 0
+      : phase === 'exhale'
+        ? 0.5 + 0.5 * p
+        : 0.55
+
+  // Bindu (center) emphasis when direction === 'forward'.
+  const binduAuraOpacity =
+    direction === 'forward' ? 0.6 + 0.4 * p : 0.25
+  const binduFontSize = direction === 'forward' ? 16 : 13
+  const binduEchoOpacity = phase === 'exhale' ? 0.18 + 0.25 * p : 0
 
   return (
     <div style={hudStyle}>
@@ -367,38 +448,120 @@ export function SomaticHud() {
                   aria-label={`Ritual core: vowel ${vowel}, direction ${direction}, phase ${phase}`}
                   style={{ ...coreStyle, filter: glow }}
                 >
-                  <rect
-                    x={frameInset}
-                    y={frameInset}
-                    width={frameSize}
-                    height={frameSize}
+                  {/* Segmented outer ring — structural texture. */}
+                  <polygon
+                    points={octagonPoints(octR + 3)}
+                    fill="none"
+                    stroke={WHITE}
+                    strokeWidth={0.4}
+                    strokeDasharray="0.5 3"
+                    vectorEffect="non-scaling-stroke"
+                    opacity={0.35}
+                  />
+
+                  {/* Containment frame — primary octagon. */}
+                  <polygon
+                    points={octagonPoints(octR)}
                     fill="none"
                     stroke={WHITE}
                     strokeWidth={frameStrokeRendered}
                     vectorEffect="non-scaling-stroke"
                   />
-                  <circle
-                    cx={50}
-                    cy={50}
-                    r={ringR}
-                    fill="none"
-                    stroke={WHITE}
-                    strokeWidth={ringStroke}
-                    vectorEffect="non-scaling-stroke"
-                    opacity={ringOpacityRendered}
-                  />
-                  {phase === 'inhale' && (
+
+                  {/* Cardinal directional markers — one lights CYAN when active. */}
+                  <g>
+                    {CARDINALS.map((c) => {
+                      const m = cardinalMarker(c, octR)
+                      const active = c === direction
+                      const color = active ? CYAN : WHITE
+                      const opacity = active ? markerIntensity : DIM_OPACITY
+                      return (
+                        <g key={c} opacity={opacity}>
+                          <line
+                            x1={m.x1}
+                            y1={m.y1}
+                            x2={m.x2}
+                            y2={m.y2}
+                            stroke={color}
+                            strokeWidth={0.8}
+                            vectorEffect="non-scaling-stroke"
+                          />
+                          <rect
+                            x={m.nx - 0.9}
+                            y={m.ny - 0.9}
+                            width={1.8}
+                            height={1.8}
+                            fill={color}
+                            stroke={color}
+                            strokeWidth={0.3}
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        </g>
+                      )
+                    })}
+                  </g>
+
+                  {/* Outer orbital trace — dashed, rotating clockwise with the cycle. */}
+                  <g transform={`rotate(${ringAngleA} 50 50)`}>
                     <circle
                       cx={50}
                       cy={50}
-                      r={ringR + 6}
+                      r={orbitOuterR}
                       fill="none"
                       stroke={WHITE}
-                      strokeWidth={0.3 + 0.9 * p}
+                      strokeWidth={0.5}
+                      strokeDasharray={dashA}
                       vectorEffect="non-scaling-stroke"
-                      opacity={0.35 * p}
+                      opacity={ringOpacityRendered}
                     />
+                  </g>
+
+                  {/* Inner orbital trace — dashed, counter-rotating. */}
+                  <g transform={`rotate(${ringAngleB} 50 50)`}>
+                    <circle
+                      cx={50}
+                      cy={50}
+                      r={orbitInnerR}
+                      fill="none"
+                      stroke={WHITE}
+                      strokeWidth={0.7}
+                      strokeDasharray={dashB}
+                      vectorEffect="non-scaling-stroke"
+                      opacity={0.5 + (snap ? 0.5 : 0)}
+                    />
+                  </g>
+
+                  {/* Bindu aura — faint halo that swells when direction === 'forward'. */}
+                  <circle
+                    cx={50}
+                    cy={50}
+                    r={6}
+                    fill="none"
+                    stroke={WHITE}
+                    strokeWidth={0.3}
+                    vectorEffect="non-scaling-stroke"
+                    opacity={binduAuraOpacity}
+                  />
+
+                  {/* Bindu echo — offset cyan duplicate, exhale-only drop-shadow without filters. */}
+                  {phase === 'exhale' && (
+                    <text
+                      x={50.6}
+                      y={50.6}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill={CYAN}
+                      fontFamily={MONO}
+                      fontSize={binduFontSize}
+                      fontWeight={500}
+                      letterSpacing="0.08em"
+                      opacity={binduEchoOpacity}
+                    >
+                      {vowel.toUpperCase()}
+                    </text>
                   )}
+
+                  {/* Bindu sigil — the operative center. */}
                   <text
                     x={50}
                     y={50}
@@ -406,8 +569,9 @@ export function SomaticHud() {
                     dominantBaseline="central"
                     fill={WHITE}
                     fontFamily={MONO}
-                    fontSize={11}
+                    fontSize={binduFontSize}
                     fontWeight={500}
+                    letterSpacing="0.08em"
                   >
                     {vowel.toUpperCase()}
                   </text>
