@@ -5,7 +5,8 @@ import type { Direction, Vowel } from '../engines/metronomeEngine'
 
 const BLACK = '#050505'
 const WHITE = '#FFFFFF'
-const DIM_OPACITY = 0.4
+const CYAN = '#00FFFF'
+const DIM_OPACITY = 0.35
 const MONO =
   "ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, 'Courier New', monospace"
 
@@ -28,23 +29,26 @@ const hudStyle: CSSProperties = {
   backgroundColor: BLACK,
   color: WHITE,
   fontFamily: MONO,
-  minHeight: '100vh',
+  minHeight: '100dvh',
+  width: '100%',
   boxSizing: 'border-box',
-  padding: '48px 48px 24px',
+  padding: 'clamp(12px, 2vmin, 28px)',
   display: 'flex',
   flexDirection: 'column',
-  gap: '48px',
+  gap: 'clamp(12px, 2vmin, 24px)',
+  overflow: 'hidden',
 }
 
-const sectionStyle: CSSProperties = {
+const topZoneStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '12px',
+  gap: 'clamp(8px, 1.2vmin, 14px)',
+  flex: '0 0 auto',
 }
 
 const phaseLabelStyle: CSSProperties = {
   fontFamily: MONO,
-  fontSize: '44px',
+  fontSize: 'clamp(28px, 6vmin, 64px)',
   fontWeight: 500,
   letterSpacing: '0.32em',
   color: WHITE,
@@ -56,17 +60,52 @@ const phaseLabelStyle: CSSProperties = {
 
 const progressTrackStyle: CSSProperties = {
   width: '100%',
-  height: '14px',
-  border: `1px solid ${WHITE}`,
-  boxSizing: 'border-box',
-  backgroundColor: BLACK,
+  height: '1px',
+  backgroundColor: 'rgba(255,255,255,0.22)',
+  position: 'relative',
 }
 
 const progressFillStyle = (p: number): CSSProperties => ({
   width: `${Math.max(0, Math.min(1, p)) * 100}%`,
-  height: '100%',
+  height: '1px',
   backgroundColor: WHITE,
 })
+
+const centerZoneStyle: CSSProperties = {
+  flex: '1 1 auto',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: 0,
+  position: 'relative',
+}
+
+const directionWrapperStyle = (dx: string, dy: string): CSSProperties => ({
+  transform: `translate(${dx}, ${dy})`,
+  transition: 'transform 200ms ease-out',
+  willChange: 'transform',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+})
+
+const forwardScalerStyle = (scale: number): CSSProperties => ({
+  transform: `scale(${scale})`,
+  transformOrigin: '50% 50%',
+})
+
+const coreStyle: CSSProperties = {
+  width: '65vmin',
+  height: '65vmin',
+  display: 'block',
+}
+
+const bottomZoneStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 'clamp(8px, 1.2vmin, 14px)',
+  flex: '0 0 auto',
+}
 
 const stripLabelStyle: CSSProperties = {
   fontFamily: MONO,
@@ -80,23 +119,24 @@ const stripLabelStyle: CSSProperties = {
 const stripStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(5, 1fr)',
-  gap: '12px',
+  gap: '8px',
 }
 
 const cellBaseStyle: CSSProperties = {
   border: `1px solid ${WHITE}`,
-  padding: '18px 8px',
+  padding: '10px 6px',
   textAlign: 'center',
   fontFamily: MONO,
-  fontSize: '14px',
-  letterSpacing: '0.28em',
+  fontSize: '12px',
+  letterSpacing: '0.24em',
   textTransform: 'uppercase',
   boxSizing: 'border-box',
 }
 
 const activeCellStyle: CSSProperties = {
   ...cellBaseStyle,
-  backgroundColor: WHITE,
+  backgroundColor: CYAN,
+  borderColor: CYAN,
   color: BLACK,
 }
 
@@ -107,26 +147,11 @@ const inactiveCellStyle: CSSProperties = {
   opacity: DIM_OPACITY,
 }
 
-const devToolsWrapperStyle: CSSProperties = {
-  marginTop: 'auto',
-  paddingTop: '24px',
-  borderTop: `1px solid ${WHITE}`,
-  opacity: 0.55,
-}
-
-const devToolsHeaderStyle: CSSProperties = {
-  fontFamily: MONO,
-  fontSize: '10px',
-  letterSpacing: '0.4em',
-  textTransform: 'uppercase',
-  marginBottom: '12px',
-  color: WHITE,
-}
-
-const devToolsRowStyle: CSSProperties = {
+const controlsRowStyle: CSSProperties = {
   display: 'flex',
   gap: '8px',
   flexWrap: 'wrap',
+  justifyContent: 'center',
 }
 
 const devButtonStyle: CSSProperties = {
@@ -147,6 +172,51 @@ const devButtonDisabledStyle: CSSProperties = {
   cursor: 'not-allowed',
 }
 
+const telemetryStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, 1fr)',
+  gap: '8px',
+  borderTop: '1px solid rgba(255,255,255,0.22)',
+  paddingTop: '8px',
+  fontFamily: MONO,
+  fontSize: '10px',
+  letterSpacing: '0.3em',
+  textTransform: 'uppercase',
+  opacity: 0.75,
+}
+
+const telemetryCellStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '4px',
+}
+
+const telemetryKeyStyle: CSSProperties = {
+  opacity: 0.5,
+}
+
+const telemetryValueStyle: CSSProperties = {
+  color: WHITE,
+  fontVariantNumeric: 'tabular-nums',
+}
+
+function directionTranslate(d: Direction): { dx: string; dy: string } {
+  switch (d) {
+    case 'up':
+      return { dx: '0', dy: '-5vmin' }
+    case 'down':
+      return { dx: '0', dy: '5vmin' }
+    case 'left':
+      return { dx: '-5vmin', dy: '0' }
+    case 'right':
+      return { dx: '5vmin', dy: '0' }
+    case 'forward':
+    default:
+      return { dx: '0', dy: '0' }
+  }
+}
+
 export function SomaticHud() {
   const { running, runtime, activeStep, progress, start, pause, reset, tick } =
     useMivta()
@@ -159,58 +229,133 @@ export function SomaticHud() {
     tick(tickCounterRef.current)
   }
 
-  const phaseText = runtime.metronome.phase === 'inhale' ? 'INHALE' : 'EXHALE'
+  const phase = runtime.metronome.phase
+  const phaseText = phase === 'inhale' ? 'INHALE' : 'EXHALE'
+  const p = Math.max(0, Math.min(1, progress))
+  const direction = activeStep.direction
+  const vowel = activeStep.vowel
+
+  const { dx, dy } = directionTranslate(direction)
+  const forwardScale = direction === 'forward' ? 1.25 : 1
+
+  // Breath-responsive frame geometry (SVG viewBox 0 0 100 100).
+  // Inhale: frame contracts toward the center; stroke thickens (gathering force).
+  // Exhale: frame releases outward; stroke relaxes (releasing force).
+  let frameInset: number
+  let frameStroke: number
+  if (phase === 'inhale') {
+    frameInset = 5 + 15 * p
+    frameStroke = 0.6 + 1.8 * p
+  } else {
+    frameInset = 20 - 15 * p
+    frameStroke = 2.4 - 1.6 * p
+  }
+  const frameSize = 100 - 2 * frameInset
+
+  // Inner ring — counter-pulse, keeps the Bindu legible.
+  const ringR = phase === 'inhale' ? 34 - 8 * p : 26 + 8 * p
+  const ringStroke = phase === 'inhale' ? 0.4 + 0.8 * p : 1.2 - 0.6 * p
+
+  // Cyan glow intensifies only on exhale (release).
+  const glow =
+    phase === 'exhale'
+      ? `drop-shadow(0 0 ${1 + 3 * p}vmin rgba(0,255,255,${(
+          0.18 +
+          0.42 * p
+        ).toFixed(3)}))`
+      : 'drop-shadow(0 0 0 rgba(0,0,0,0))'
 
   return (
     <div style={hudStyle}>
-      <section style={sectionStyle}>
+      <section style={topZoneStyle}>
         <div role="heading" aria-level={1} style={phaseLabelStyle}>
           {phaseText}
         </div>
         <div
           style={progressTrackStyle}
           role="progressbar"
-          aria-valuenow={Math.round(progress * 100)}
+          aria-valuenow={Math.round(p * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label={`${phaseText} progress`}
         >
-          <div style={progressFillStyle(progress)} />
+          <div style={progressFillStyle(p)} />
         </div>
       </section>
 
-      <section style={sectionStyle}>
+      <section style={centerZoneStyle}>
+        <div style={directionWrapperStyle(dx, dy)}>
+          <div style={forwardScalerStyle(forwardScale)}>
+            <svg
+              viewBox="0 0 100 100"
+              preserveAspectRatio="xMidYMid meet"
+              role="img"
+              aria-label={`Ritual core: vowel ${vowel}, direction ${direction}, phase ${phase}`}
+              style={{ ...coreStyle, filter: glow }}
+            >
+              <rect
+                x={frameInset}
+                y={frameInset}
+                width={frameSize}
+                height={frameSize}
+                fill="none"
+                stroke={WHITE}
+                strokeWidth={frameStroke}
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                cx={50}
+                cy={50}
+                r={ringR}
+                fill="none"
+                stroke={WHITE}
+                strokeWidth={ringStroke}
+                vectorEffect="non-scaling-stroke"
+                opacity={0.6}
+              />
+              <text
+                x={50}
+                y={50}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill={WHITE}
+                fontFamily={MONO}
+                fontSize={11}
+                fontWeight={500}
+              >
+                {vowel.toUpperCase()}
+              </text>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section style={bottomZoneStyle}>
         <div style={stripLabelStyle}>Direction</div>
         <div style={stripStyle}>
           {DIRECTIONS.map((d) => (
             <div
               key={d}
-              style={
-                d === activeStep.direction ? activeCellStyle : inactiveCellStyle
-              }
+              style={d === direction ? activeCellStyle : inactiveCellStyle}
             >
               {d}
             </div>
           ))}
         </div>
-        <div style={{ ...stripLabelStyle, marginTop: '8px' }}>Vowel</div>
+
+        <div style={stripLabelStyle}>Vowel</div>
         <div style={stripStyle}>
           {VOWELS.map((v) => (
             <div
               key={v}
-              style={
-                v === activeStep.vowel ? activeCellStyle : inactiveCellStyle
-              }
+              style={v === vowel ? activeCellStyle : inactiveCellStyle}
             >
               {v}
             </div>
           ))}
         </div>
-      </section>
 
-      <footer style={devToolsWrapperStyle}>
-        <div style={devToolsHeaderStyle}>Dev Tools</div>
-        <div style={devToolsRowStyle}>
+        <div style={controlsRowStyle}>
           <button type="button" style={devButtonStyle} onClick={start}>
             Start
           </button>
@@ -230,10 +375,34 @@ export function SomaticHud() {
             Tick +1000ms
           </button>
         </div>
-      </footer>
+
+        <div style={telemetryStyle} aria-label="Telemetry">
+          <div style={telemetryCellStyle}>
+            <span style={telemetryKeyStyle}>cycle</span>
+            <span style={telemetryValueStyle}>
+              {runtime.metronome.cycleCount}
+            </span>
+          </div>
+          <div style={telemetryCellStyle}>
+            <span style={telemetryKeyStyle}>index</span>
+            <span style={telemetryValueStyle}>
+              {runtime.metronome.activeIndex}
+            </span>
+          </div>
+          <div style={telemetryCellStyle}>
+            <span style={telemetryKeyStyle}>elapsed ms</span>
+            <span style={telemetryValueStyle}>
+              {Math.round(runtime.metronome.phaseElapsedMs)}
+            </span>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }
 
 export default SomaticHud
+	
+	
+	
 
