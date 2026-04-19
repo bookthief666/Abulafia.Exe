@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { motion } from 'framer-motion'
 import { useMivta } from '../hooks/useMivta'
 import type {
   BreathPhase,
@@ -96,6 +97,44 @@ const centerZoneStyle: CSSProperties = {
   justifyContent: 'center',
   minHeight: 0,
   position: 'relative',
+  isolation: 'isolate',
+}
+
+// Ambient atmospheric halos — decorative-only, out of phase with breath.
+// They sit behind the SVG and are deliberately pointer-inert.
+const haloOuterStyle: CSSProperties = {
+  position: 'absolute',
+  width: '92vmin',
+  height: '92vmin',
+  borderRadius: '50%',
+  background:
+    'radial-gradient(closest-side, rgba(0,255,255,0.18), rgba(0,255,255,0.05) 55%, rgba(0,255,255,0) 72%)',
+  pointerEvents: 'none',
+  zIndex: 0,
+  filter: 'blur(2vmin)',
+  mixBlendMode: 'screen',
+}
+
+const haloInnerStyle: CSSProperties = {
+  position: 'absolute',
+  width: '56vmin',
+  height: '56vmin',
+  borderRadius: '50%',
+  background:
+    'radial-gradient(closest-side, rgba(255,255,255,0.09), rgba(0,255,255,0.06) 45%, rgba(0,255,255,0) 75%)',
+  pointerEvents: 'none',
+  zIndex: 0,
+  filter: 'blur(1vmin)',
+  mixBlendMode: 'screen',
+}
+
+const floatWrapperStyle: CSSProperties = {
+  position: 'relative',
+  zIndex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  willChange: 'transform',
 }
 
 const directionWrapperStyle = (
@@ -188,7 +227,7 @@ const controlsRowStyle: CSSProperties = {
   gap: '8px',
   flexWrap: 'wrap',
   justifyContent: 'center',
-  opacity: 0.55,
+  opacity: 0.6,
 }
 
 const devButtonStyle: CSSProperties = {
@@ -218,7 +257,7 @@ const telemetryStyle: CSSProperties = {
   fontSize: '10px',
   letterSpacing: '0.3em',
   textTransform: 'uppercase',
-  opacity: 0.35,
+  opacity: 0.45,
 }
 
 const telemetryCellStyle: CSSProperties = {
@@ -437,6 +476,23 @@ export function SomaticHud() {
       </section>
 
       <section style={centerZoneStyle}>
+        <motion.div
+          aria-hidden="true"
+          style={haloOuterStyle}
+          animate={{ scale: [1, 1.06, 1], opacity: [0.55, 0.9, 0.55] }}
+          transition={{ duration: 8.4, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          aria-hidden="true"
+          style={haloInnerStyle}
+          animate={{ scale: [1.04, 0.96, 1.04], opacity: [0.7, 1, 0.7] }}
+          transition={{ duration: 5.6, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          style={floatWrapperStyle}
+          animate={{ y: [0, -3, 0, 3, 0] }}
+          transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
+        >
         <div style={directionWrapperStyle(dx, dy, sx, sy)}>
           <div style={forwardScalerStyle(forwardScale)}>
             <div style={snapScalerStyle(snap)}>
@@ -448,6 +504,22 @@ export function SomaticHud() {
                   aria-label={`Ritual core: vowel ${vowel}, direction ${direction}, phase ${phase}`}
                   style={{ ...coreStyle, filter: glow }}
                 >
+                  {/* Ambient luminous pulse behind the bindu — atmospheric
+                      secondary motion, independent of the breath metronome. */}
+                  <motion.circle
+                    cx={50}
+                    cy={50}
+                    r={14}
+                    fill={CYAN}
+                    opacity={0.06}
+                    animate={{ opacity: [0.04, 0.11, 0.04], r: [13, 16, 13] }}
+                    transition={{
+                      duration: 5.2,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                    }}
+                  />
+
                   {/* Segmented outer ring — structural texture. */}
                   <polygon
                     points={octagonPoints(octR + 3)}
@@ -580,6 +652,7 @@ export function SomaticHud() {
             </div>
           </div>
         </div>
+        </motion.div>
       </section>
 
       <section style={bottomZoneStyle}>
