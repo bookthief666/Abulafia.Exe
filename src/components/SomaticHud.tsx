@@ -30,6 +30,23 @@ const VOWELS: readonly Vowel[] = [
   'qubuts',
 ]
 
+// Standard Hebrew / Abulafian operational phonetic mapping.
+const VOWEL_GLYPH: Record<Vowel, string> = {
+  holam: 'O',
+  qamatz: 'A',
+  hiriq: 'I',
+  tzere: 'E',
+  qubuts: 'U',
+}
+
+// Tetragrammaton fragment set — repeated 3× around the outer ring (12 glyphs).
+const TETRAGRAMMATON: readonly string[] = ['Y', 'H', 'V', 'H']
+
+const INNER_RING_COUNT = 8
+const OUTER_RING_COUNT = 12
+const INNER_RING_R = 22
+const OUTER_RING_R = 36
+
 // Eight vertices around (50,50) at radius r, pointy-top (angle starts at -π/2).
 function octagonPoints(r: number): string {
   const cx = 50
@@ -44,6 +61,56 @@ function octagonPoints(r: number): string {
   return pts.join(' ')
 }
 
+function polarPoint(
+  cx: number,
+  cy: number,
+  r: number,
+  angleRad: number,
+): { x: number; y: number } {
+  return {
+    x: cx + r * Math.cos(angleRad),
+    y: cy + r * Math.sin(angleRad),
+  }
+}
+
+// Cardinal direction → SVG angle (radians), with screen-y pointing down.
+// Forward has no cardinal angle; it lives at the center.
+function cardinalAngle(d: Direction): number | null {
+  switch (d) {
+    case 'up':
+      return -Math.PI / 2
+    case 'right':
+      return 0
+    case 'down':
+      return Math.PI / 2
+    case 'left':
+      return Math.PI
+    case 'forward':
+    default:
+      return null
+  }
+}
+
+// Given a ring of N evenly spaced glyphs starting at -π/2, returns the index
+// closest to the target angle — or -1 if there is no active cardinal.
+function activeRingIndex(count: number, targetAngle: number | null): number {
+  if (targetAngle === null) return -1
+  let best = 0
+  let bestDelta = Infinity
+  for (let i = 0; i < count; i++) {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / count
+    // Normalize angular distance to [0, π].
+    let delta = Math.abs(((a - targetAngle) % (2 * Math.PI)) + 2 * Math.PI) %
+      (2 * Math.PI)
+    if (delta > Math.PI) delta = 2 * Math.PI - delta
+    if (delta < bestDelta) {
+      bestDelta = delta
+      best = i
+    }
+  }
+  return best
+}
+
 const hudStyle: CSSProperties = {
   backgroundColor: BLACK,
   color: WHITE,
@@ -56,6 +123,7 @@ const hudStyle: CSSProperties = {
   flexDirection: 'column',
   gap: 'clamp(12px, 2vmin, 24px)',
   overflow: 'hidden',
+  position: 'relative',
 }
 
 const topZoneStyle: CSSProperties = {
@@ -63,6 +131,8 @@ const topZoneStyle: CSSProperties = {
   flexDirection: 'column',
   gap: 'clamp(8px, 1.2vmin, 14px)',
   flex: '0 0 auto',
+  position: 'relative',
+  zIndex: 3,
 }
 
 const phaseLabelStyle: CSSProperties = {
@@ -98,6 +168,33 @@ const centerZoneStyle: CSSProperties = {
   minHeight: 0,
   position: 'relative',
   isolation: 'isolate',
+  zIndex: 1,
+}
+
+// Static radial vignette — pure CSS background, no motion, no filter.
+// Sits behind the halos and SVG, deepens the periphery of the chamber.
+const vignetteStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  background:
+    'radial-gradient(ellipse at center, rgba(0,255,255,0.035) 0%, rgba(5,5,5,0) 40%, rgba(5,5,5,0.55) 85%, rgba(0,0,0,0.85) 100%)',
+  pointerEvents: 'none',
+  zIndex: 0,
+}
+
+// Bottom veil — a soft gradient fade over the HUD area so controls and
+// telemetry dissolve into the chamber instead of sitting in a panel.
+// Positioned absolute within hudStyle's relative root (not fixed).
+const bottomVeilStyle: CSSProperties = {
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  bottom: 0,
+  height: '28vh',
+  pointerEvents: 'none',
+  background:
+    'linear-gradient(to bottom, rgba(5,5,5,0) 0%, rgba(5,5,5,0.55) 55%, rgba(5,5,5,0.85) 100%)',
+  zIndex: 2,
 }
 
 // Ambient atmospheric halos — decorative-only, out of phase with breath.
@@ -180,13 +277,15 @@ const bottomZoneStyle: CSSProperties = {
   flexDirection: 'column',
   gap: 'clamp(8px, 1.2vmin, 14px)',
   flex: '0 0 auto',
+  position: 'relative',
+  zIndex: 3,
 }
 
 const stripLabelStyle: CSSProperties = {
   fontFamily: MONO,
   fontSize: '10px',
   letterSpacing: '0.4em',
-  opacity: 0.35,
+  opacity: 0.3,
   textTransform: 'uppercase',
   color: WHITE,
 }
@@ -218,7 +317,7 @@ const activeCellStyle: CSSProperties = {
 const inactiveCellStyle: CSSProperties = {
   ...cellBaseStyle,
   color: WHITE,
-  opacity: 0.3,
+  opacity: 0.25,
   borderBottom: '1px solid transparent',
 }
 
@@ -227,24 +326,25 @@ const controlsRowStyle: CSSProperties = {
   gap: '8px',
   flexWrap: 'wrap',
   justifyContent: 'center',
-  opacity: 0.6,
+  opacity: 0.5,
 }
 
 const devButtonStyle: CSSProperties = {
-  backgroundColor: BLACK,
+  backgroundColor: 'transparent',
   color: WHITE,
-  border: `1px solid ${WHITE}`,
+  border: '1px solid transparent',
   padding: '8px 14px',
   fontFamily: MONO,
   fontSize: '11px',
   letterSpacing: '0.2em',
   textTransform: 'uppercase',
   cursor: 'pointer',
+  opacity: 0.7,
 }
 
 const devButtonDisabledStyle: CSSProperties = {
   ...devButtonStyle,
-  opacity: 0.4,
+  opacity: 0.3,
   cursor: 'not-allowed',
 }
 
@@ -257,7 +357,7 @@ const telemetryStyle: CSSProperties = {
   fontSize: '10px',
   letterSpacing: '0.3em',
   textTransform: 'uppercase',
-  opacity: 0.45,
+  opacity: 0.32,
 }
 
 const telemetryCellStyle: CSSProperties = {
@@ -362,6 +462,7 @@ export function SomaticHud() {
   const p = Math.max(0, Math.min(1, progress))
   const direction = activeStep.direction
   const vowel = activeStep.vowel
+  const glyph = VOWEL_GLYPH[vowel]
 
   const { dx, dy } = directionTranslate(direction)
   const { sx, sy } = directionStretch(direction)
@@ -403,9 +504,10 @@ export function SomaticHud() {
   }
 
   // Core scale — progress-driven, no CSS transition.
-  // Inhale contracts 1.00 -> 0.95 (tension). Exhale blooms 0.95 -> 1.06 (emanation).
+  // Inhale contracts 1.00 -> 0.93 (deeper tension).
+  // Exhale blooms 0.93 -> 1.08 (more dramatic emanation).
   const breathScale =
-    phase === 'inhale' ? 1 - 0.05 * p : 0.95 + 0.11 * p
+    phase === 'inhale' ? 1 - 0.07 * p : 0.93 + 0.15 * p
 
   // Cyan glow intensifies only on exhale (restrained release).
   const glow =
@@ -454,8 +556,17 @@ export function SomaticHud() {
   // Bindu (center) emphasis when direction === 'forward'.
   const binduAuraOpacity =
     direction === 'forward' ? 0.6 + 0.4 * p : 0.25
-  const binduFontSize = direction === 'forward' ? 16 : 13
+  const binduFontSize = direction === 'forward' ? 32 : 28
   const binduEchoOpacity = phase === 'exhale' ? 0.18 + 0.25 * p : 0
+
+  // Letter-field opacity envelope: gathers on inhale, radiates on exhale.
+  const fieldOpacity =
+    phase === 'inhale' ? 0.35 + 0.25 * p : 0.55 + 0.4 * p
+
+  // Which ring index is aligned with the current cardinal direction?
+  const activeAngle = cardinalAngle(direction)
+  const innerActiveIdx = activeRingIndex(INNER_RING_COUNT, activeAngle)
+  const outerActiveIdx = activeRingIndex(OUTER_RING_COUNT, activeAngle)
 
   return (
     <div style={hudStyle}>
@@ -476,6 +587,7 @@ export function SomaticHud() {
       </section>
 
       <section style={centerZoneStyle}>
+        <div aria-hidden="true" style={vignetteStyle} />
         <motion.div
           aria-hidden="true"
           style={haloOuterStyle}
@@ -490,7 +602,7 @@ export function SomaticHud() {
         />
         <motion.div
           style={floatWrapperStyle}
-          animate={{ y: [0, -3, 0, 3, 0] }}
+          animate={{ y: [0, -1.5, 0, 1.5, 0] }}
           transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
         >
         <div style={directionWrapperStyle(dx, dy, sx, sy)}>
@@ -588,6 +700,34 @@ export function SomaticHud() {
                     />
                   </g>
 
+                  {/* Outer letter ring — YHVH × 3, 12 glyphs at clockface positions.
+                      Rotates clockwise with the cycle, locked to the outer orbital trace. */}
+                  <g transform={`rotate(${ringAngleA} 50 50)`} opacity={fieldOpacity}>
+                    {Array.from({ length: OUTER_RING_COUNT }).map((_, i) => {
+                      const a = -Math.PI / 2 + (i * 2 * Math.PI) / OUTER_RING_COUNT
+                      const pt = polarPoint(50, 50, OUTER_RING_R, a)
+                      const letter = TETRAGRAMMATON[i % TETRAGRAMMATON.length]
+                      const isActive = i === outerActiveIdx
+                      return (
+                        <text
+                          key={`outer-${i}`}
+                          x={pt.x}
+                          y={pt.y}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fill={isActive ? CYAN : WHITE}
+                          fontFamily={MONO}
+                          fontSize={3.6}
+                          fontWeight={500}
+                          letterSpacing="0.08em"
+                          opacity={isActive ? 1 : 0.55}
+                        >
+                          {letter}
+                        </text>
+                      )
+                    })}
+                  </g>
+
                   {/* Inner orbital trace — dashed, counter-rotating. */}
                   <g transform={`rotate(${ringAngleB} 50 50)`}>
                     <circle
@@ -603,11 +743,38 @@ export function SomaticHud() {
                     />
                   </g>
 
+                  {/* Inner letter ring — active vowel glyph × 8 at octagonal positions.
+                      Counter-rotates, locked to the inner orbital trace. */}
+                  <g transform={`rotate(${ringAngleB} 50 50)`} opacity={fieldOpacity}>
+                    {Array.from({ length: INNER_RING_COUNT }).map((_, i) => {
+                      const a = -Math.PI / 2 + (i * 2 * Math.PI) / INNER_RING_COUNT
+                      const pt = polarPoint(50, 50, INNER_RING_R, a)
+                      const isActive = i === innerActiveIdx
+                      return (
+                        <text
+                          key={`inner-${i}`}
+                          x={pt.x}
+                          y={pt.y}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fill={isActive ? CYAN : WHITE}
+                          fontFamily={MONO}
+                          fontSize={4.5}
+                          fontWeight={500}
+                          letterSpacing="0.08em"
+                          opacity={isActive ? 1 : 0.5}
+                        >
+                          {glyph}
+                        </text>
+                      )
+                    })}
+                  </g>
+
                   {/* Bindu aura — faint halo that swells when direction === 'forward'. */}
                   <circle
                     cx={50}
                     cy={50}
-                    r={6}
+                    r={9}
                     fill="none"
                     stroke={WHITE}
                     strokeWidth={0.3}
@@ -629,7 +796,7 @@ export function SomaticHud() {
                       letterSpacing="0.08em"
                       opacity={binduEchoOpacity}
                     >
-                      {vowel.toUpperCase()}
+                      {glyph}
                     </text>
                   )}
 
@@ -645,7 +812,7 @@ export function SomaticHud() {
                     fontWeight={500}
                     letterSpacing="0.08em"
                   >
-                    {vowel.toUpperCase()}
+                    {glyph}
                   </text>
                 </svg>
               </div>
@@ -654,6 +821,8 @@ export function SomaticHud() {
         </div>
         </motion.div>
       </section>
+
+      <div aria-hidden="true" style={bottomVeilStyle} />
 
       <section style={bottomZoneStyle}>
         <div style={stripLabelStyle}>Direction</div>
