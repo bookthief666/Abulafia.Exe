@@ -54,13 +54,20 @@ const modeButtonStyle = (active: boolean): CSSProperties => ({
   cursor: 'pointer',
 })
 
-// State-preserving mode shell: both layers stay mounted; only the active
-// one is visible. This keeps the RitualSession + useMivta runtime intact
-// when the practitioner switches to Study and back.
-const layerStyle = (visible: boolean): CSSProperties => ({
-  display: visible ? 'block' : 'none',
+// State-preserving mode shell: both layers stay mounted and crossfade on
+// switch. No display:none / visibility:hidden — the inactive layer is
+// opacity 0 + pointer-events none so the RitualSession, PracticeBuilder
+// form fields, and useMivta runtime all survive a mode change intact.
+const layerStyle = (active: boolean): CSSProperties => ({
+  position: 'absolute',
+  inset: 0,
   width: '100%',
   minHeight: '100dvh',
+  opacity: active ? 1 : 0,
+  pointerEvents: active ? 'auto' : 'none',
+  zIndex: active ? 1 : 0,
+  transition: 'opacity 320ms ease-out',
+  overflow: 'auto',
 })
 
 function App() {
