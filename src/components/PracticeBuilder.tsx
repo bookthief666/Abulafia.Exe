@@ -157,10 +157,14 @@ const footerStyle: CSSProperties = {
   color: 'rgba(255,255,255,0.32)',
 }
 
-const errorCopy: Record<'empty' | 'length' | 'whitespace', string> = {
+const errorCopy: Record<
+  'empty' | 'length' | 'whitespace' | 'alphabet',
+  string
+> = {
   empty: 'Inscribe three letters',
   length: `Root must be exactly ${ROOT_LENGTH} letters`,
   whitespace: 'Whitespace is not permitted',
+  alphabet: 'Letters A–Z only',
 }
 
 export type PracticeBuilderProps = {

@@ -35,6 +35,21 @@ describe('validateRoot', () => {
   it('rejects input longer than 3 without truncating', () => {
     expect(validateRoot('YHVH')).toEqual({ ok: false, reason: 'length' })
   })
+
+  it('rejects digits at the correct length', () => {
+    expect(validateRoot('Y1V')).toEqual({ ok: false, reason: 'alphabet' })
+    expect(validateRoot('123')).toEqual({ ok: false, reason: 'alphabet' })
+  })
+
+  it('rejects punctuation and symbols', () => {
+    expect(validateRoot('Y-V')).toEqual({ ok: false, reason: 'alphabet' })
+    expect(validateRoot('Y.V')).toEqual({ ok: false, reason: 'alphabet' })
+    expect(validateRoot('!!!')).toEqual({ ok: false, reason: 'alphabet' })
+  })
+
+  it('rejects non-Latin letters', () => {
+    expect(validateRoot('יהו')).toEqual({ ok: false, reason: 'alphabet' })
+  })
 })
 
 describe('buildPermutationStrings', () => {
@@ -86,13 +101,32 @@ describe('commitInvocation + advancePermutation', () => {
     expect(s.loopsCompleted).toBe(1)
   })
 
-  it('stops advancing after repetitionCount loops complete', () => {
+  it('freezes on the final permutation index when the last loop completes', () => {
     let s = commitInvocation('YHV', 1)
     for (let i = 0; i < 6; i++) s = advancePermutation(s)
     expect(s.loopsCompleted).toBe(1)
+    // Final permutation of the set, not a wrap back to index 0.
+    expect(s.permutationIndex).toBe(s.permutations.length - 1)
     expect(isSessionComplete(s)).toBe(true)
     const frozen = advancePermutation(s)
     expect(frozen).toEqual(s)
+  })
+
+  it('wraps to index 0 on non-terminal loop completions', () => {
+    let s = commitInvocation('YHV', 3)
+    // 6 advances completes loop 1 of 3 — should wrap to index 0.
+    for (let i = 0; i < 6; i++) s = advancePermutation(s)
+    expect(s.loopsCompleted).toBe(1)
+    expect(s.permutationIndex).toBe(0)
+    // 6 more advances completes loop 2 of 3 — still not terminal.
+    for (let i = 0; i < 6; i++) s = advancePermutation(s)
+    expect(s.loopsCompleted).toBe(2)
+    expect(s.permutationIndex).toBe(0)
+    // Final loop freezes on the last index.
+    for (let i = 0; i < 6; i++) s = advancePermutation(s)
+    expect(s.loopsCompleted).toBe(3)
+    expect(s.permutationIndex).toBe(s.permutations.length - 1)
+    expect(isSessionComplete(s)).toBe(true)
   })
 
   it('is a no-op before invocation', () => {

@@ -15,9 +15,13 @@ export type RitualSession = {
   loopsCompleted: number
 }
 
+export type ValidateRootReason = 'empty' | 'length' | 'whitespace' | 'alphabet'
+
 export type ValidateRootResult =
   | { ok: true; value: string }
-  | { ok: false; reason: 'empty' | 'length' | 'whitespace' }
+  | { ok: false; reason: ValidateRootReason }
+
+const LETTERS_ONLY = /^[A-Za-z]+$/
 
 export function createInitialSession(): RitualSession {
   return {
@@ -39,6 +43,9 @@ export function validateRoot(raw: string): ValidateRootResult {
   }
   if (raw.length !== ROOT_LENGTH) {
     return { ok: false, reason: 'length' }
+  }
+  if (!LETTERS_ONLY.test(raw)) {
+    return { ok: false, reason: 'alphabet' }
   }
   return { ok: true, value: raw.toUpperCase() }
 }
@@ -67,10 +74,20 @@ export function advancePermutation(session: RitualSession): RitualSession {
 
   const nextIndex = session.permutationIndex + 1
   if (nextIndex >= session.permutations.length) {
+    const nextLoopsCompleted = session.loopsCompleted + 1
+    // Terminal completion: freeze on the final permutation so the chamber
+    // does not snap back to the first glyph at the moment the rite ends.
+    if (nextLoopsCompleted >= session.repetitionCount) {
+      return {
+        ...session,
+        permutationIndex: session.permutations.length - 1,
+        loopsCompleted: nextLoopsCompleted,
+      }
+    }
     return {
       ...session,
       permutationIndex: 0,
-      loopsCompleted: session.loopsCompleted + 1,
+      loopsCompleted: nextLoopsCompleted,
     }
   }
   return { ...session, permutationIndex: nextIndex }

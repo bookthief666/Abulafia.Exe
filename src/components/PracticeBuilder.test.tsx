@@ -68,6 +68,19 @@ describe('PracticeBuilder', () => {
     expect(onInvoke).not.toHaveBeenCalled()
   })
 
+  it('rejects digits and symbols at the correct length', () => {
+    const { onInvoke } = setup()
+    fireEvent.change(rootInput(), { target: { value: 'Y1V' } })
+    submit()
+    expect(screen.getByText(/letters A.?Z only/i)).toBeTruthy()
+    expect(onInvoke).not.toHaveBeenCalled()
+
+    fireEvent.change(rootInput(), { target: { value: 'Y-V' } })
+    submit()
+    expect(screen.getByText(/letters A.?Z only/i)).toBeTruthy()
+    expect(onInvoke).not.toHaveBeenCalled()
+  })
+
   it('rejects non-positive repetitions', () => {
     const { onInvoke } = setup()
     fireEvent.change(rootInput(), { target: { value: 'yhv' } })
