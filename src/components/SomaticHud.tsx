@@ -147,6 +147,30 @@ const phaseLabelStyle: CSSProperties = {
   textTransform: 'uppercase',
 }
 
+const permutationHeaderStyle: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: 'clamp(22px, 4.6vmin, 48px)',
+  fontWeight: 500,
+  letterSpacing: '0.42em',
+  color: WHITE,
+  textAlign: 'center',
+  margin: 0,
+  padding: 0,
+  textTransform: 'uppercase',
+  textIndent: '0.42em',
+}
+
+const permutationEyebrowStyle: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: '10px',
+  letterSpacing: '0.5em',
+  textTransform: 'uppercase',
+  color: CYAN,
+  opacity: 0.75,
+  margin: 0,
+  textAlign: 'center',
+}
+
 const progressTrackStyle: CSSProperties = {
   width: '100%',
   height: '1px',
@@ -350,7 +374,7 @@ const devButtonDisabledStyle: CSSProperties = {
 
 const telemetryStyle: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
   gap: '8px',
   paddingTop: '8px',
   fontFamily: MONO,
@@ -445,7 +469,23 @@ function cardinalMarker(
   return { x1, y1, x2, y2, nx: x2, ny: y2 }
 }
 
-export function SomaticHud() {
+export type SomaticHudProps = {
+  permutation?: string
+  permutationIndex?: number
+  permutationTotal?: number
+  loopsCompleted?: number
+  repetitionCount?: number
+  onBreathCycle?: () => void
+}
+
+export function SomaticHud({
+  permutation,
+  permutationIndex,
+  permutationTotal,
+  loopsCompleted,
+  repetitionCount,
+  onBreathCycle,
+}: SomaticHudProps = {}) {
   const { running, runtime, activeStep, progress, start, pause, reset, tick } =
     useMivta()
   const tickCounterRef = useRef<number | null>(null)
@@ -456,6 +496,13 @@ export function SomaticHud() {
     tickCounterRef.current = Math.max(current, baseline) + 1000
     tick(tickCounterRef.current)
   }
+
+  // Stable ref for the breath-cycle callback so the phase-edge effect below
+  // never sees a stale closure when the parent re-creates the function.
+  const onBreathCycleRef = useRef<(() => void) | undefined>(onBreathCycle)
+  useEffect(() => {
+    onBreathCycleRef.current = onBreathCycle
+  }, [onBreathCycle])
 
   const phase = runtime.metronome.phase
   const phaseText = phase === 'inhale' ? 'INHALE' : 'EXHALE'
@@ -475,7 +522,11 @@ export function SomaticHud() {
 
   useEffect(() => {
     if (phase !== prevPhaseRef.current) {
+      const prev = prevPhaseRef.current
       prevPhaseRef.current = phase
+      if (prev === 'exhale' && phase === 'inhale') {
+        onBreathCycleRef.current?.()
+      }
       if (snapTimeoutRef.current != null) {
         clearTimeout(snapTimeoutRef.current)
       }
@@ -571,7 +622,20 @@ export function SomaticHud() {
   return (
     <div style={hudStyle}>
       <section style={topZoneStyle}>
-        <div role="heading" aria-level={1} style={phaseLabelStyle}>
+        {permutation ? (
+          <>
+            <p style={permutationEyebrowStyle}>§ Permutation</p>
+            <div
+              role="heading"
+              aria-level={1}
+              style={permutationHeaderStyle}
+              data-testid="permutation-header"
+            >
+              {permutation}
+            </div>
+          </>
+        ) : null}
+        <div role="heading" aria-level={2} style={phaseLabelStyle}>
           {phaseText}
         </div>
         <div
@@ -814,6 +878,50 @@ export function SomaticHud() {
                   >
                     {glyph}
                   </text>
+
+                  {/* Permutation plinth — the chant letters rendered inside
+                      the ritual core, below the bindu. Minimal: a tight row
+                      of tokens, white, monospace; gathers on inhale and
+                      radiates on exhale via fieldOpacity. Present only when
+                      a ritual has been invoked. */}
+                  {permutation ? (
+                    <g
+                      opacity={fieldOpacity}
+                      data-testid="permutation-plinth"
+                    >
+                      <line
+                        x1={50 - 3 * permutation.length}
+                        y1={72}
+                        x2={50 + 3 * permutation.length}
+                        y2={72}
+                        stroke={WHITE}
+                        strokeWidth={0.3}
+                        vectorEffect="non-scaling-stroke"
+                        opacity={0.35}
+                      />
+                      {Array.from(permutation).map((ch, i) => {
+                        const step = 6
+                        const offset = (i - (permutation.length - 1) / 2) * step
+                        return (
+                          <text
+                            key={`perm-${i}-${ch}`}
+                            x={50 + offset}
+                            y={78}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fill={WHITE}
+                            fontFamily={MONO}
+                            fontSize={4.2}
+                            fontWeight={500}
+                            letterSpacing="0.12em"
+                            opacity={0.85}
+                          >
+                            {ch}
+                          </text>
+                        )
+                      })}
+                    </g>
+                  ) : null}
                 </svg>
               </div>
             </div>
@@ -889,6 +997,22 @@ export function SomaticHud() {
               {Math.round(runtime.metronome.phaseElapsedMs)}
             </span>
           </div>
+          {permutationTotal && permutationTotal > 0 ? (
+            <div style={telemetryCellStyle} data-testid="permutation-telemetry">
+              <span style={telemetryKeyStyle}>permutation</span>
+              <span style={telemetryValueStyle}>
+                {(permutationIndex ?? 0) + 1} / {permutationTotal}
+              </span>
+            </div>
+          ) : null}
+          {typeof repetitionCount === 'number' && repetitionCount > 0 ? (
+            <div style={telemetryCellStyle}>
+              <span style={telemetryKeyStyle}>loop</span>
+              <span style={telemetryValueStyle}>
+                {(loopsCompleted ?? 0)} / {repetitionCount}
+              </span>
+            </div>
+          ) : null}
         </div>
       </section>
     </div>
