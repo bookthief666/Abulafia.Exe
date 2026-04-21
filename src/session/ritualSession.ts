@@ -106,3 +106,35 @@ export function commitInvocation(
     loopsCompleted: 0,
   }
 }
+
+export type CompletionSnapshot = {
+  root: string
+  permutations: string[]
+  repetitionCount: number
+  totalPermutations: number
+  finalPermutation: string
+}
+
+// Returns the same reference when !invoked so React bails out of re-render
+// via Object.is — the session machine has no counters to reset anyway.
+export function restartSession(session: RitualSession): RitualSession {
+  if (!session.invoked) return session
+  return {
+    ...session,
+    permutationIndex: 0,
+    loopsCompleted: 0,
+  }
+}
+
+export function createCompletionSnapshot(
+  session: RitualSession,
+): CompletionSnapshot | null {
+  if (!isSessionComplete(session)) return null
+  return {
+    root: session.root,
+    permutations: session.permutations,
+    repetitionCount: session.repetitionCount,
+    totalPermutations: session.permutations.length,
+    finalPermutation: session.permutations[session.permutationIndex],
+  }
+}

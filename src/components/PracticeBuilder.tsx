@@ -1,7 +1,14 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { ROOT_LENGTH, validateRoot } from '../session/ritualSession'
+import {
+  ROOT_LENGTH,
+  buildPermutationStrings,
+  validateRoot,
+} from '../session/ritualSession'
+import { formatDuration } from './formatDuration'
+
+const SECONDS_PER_PERMUTATION = 8
 
 const BLACK = '#050505'
 const WHITE = '#FFFFFF'
@@ -164,7 +171,58 @@ const errorCopy: Record<
   empty: 'Inscribe three letters',
   length: `Root must be exactly ${ROOT_LENGTH} letters`,
   whitespace: 'Whitespace is not permitted',
-  alphabet: 'Letters A–Z only',
+  alphabet: 'Only letters A-Z are permitted.',
+}
+
+const previewFrameStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
+  padding: '18px 20px',
+  border: '1px solid rgba(255,255,255,0.12)',
+  backgroundColor: 'rgba(255,255,255,0.015)',
+}
+
+const previewGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)',
+  columnGap: 'clamp(14px, 2.8vmin, 28px)',
+  rowGap: '10px',
+}
+
+const previewLabelStyle: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: '10px',
+  letterSpacing: '0.4em',
+  textTransform: 'uppercase',
+  color: 'rgba(255,255,255,0.5)',
+  alignSelf: 'center',
+}
+
+const previewValueStyle: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: 'clamp(13px, 2.2vmin, 18px)',
+  letterSpacing: '0.3em',
+  textTransform: 'uppercase',
+  color: WHITE,
+  wordBreak: 'break-all',
+}
+
+const permutationListStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '8px',
+  marginTop: '4px',
+}
+
+const permutationChipStyle: CSSProperties = {
+  fontFamily: MONO,
+  fontSize: '12px',
+  letterSpacing: '0.3em',
+  textTransform: 'uppercase',
+  color: 'rgba(255,255,255,0.88)',
+  padding: '6px 10px',
+  border: '1px solid rgba(255,255,255,0.16)',
 }
 
 export type PracticeBuilderProps = {
@@ -191,6 +249,20 @@ export function PracticeBuilder({
     const parsed = Number(repetitionsRaw)
     return Number.isInteger(parsed) && parsed >= 1
   }, [repetitionsRaw])
+
+  const previewPermutations = useMemo(
+    () =>
+      rootValidation.ok ? buildPermutationStrings(rootValidation.value) : [],
+    [rootValidation],
+  )
+  const previewReps = useMemo(() => {
+    if (!repsValid) return null
+    return Number(repetitionsRaw)
+  }, [repsValid, repetitionsRaw])
+  const previewDurationSeconds =
+    previewReps !== null
+      ? previewPermutations.length * previewReps * SECONDS_PER_PERMUTATION
+      : null
 
   const rootError = attempted && !rootValidation.ok
     ? errorCopy[rootValidation.reason]
@@ -304,10 +376,56 @@ export function PracticeBuilder({
           </span>
         </div>
 
+        {rootValidation.ok ? (
+          <section
+            style={previewFrameStyle}
+            aria-label="Ritual preview"
+            data-testid="ritual-preview"
+          >
+            <p style={eyebrowStyle}>§ Preview</p>
+            <div style={previewGridStyle}>
+              <span style={previewLabelStyle}>Normalized</span>
+              <span
+                style={previewValueStyle}
+                data-testid="preview-normalized"
+              >
+                {rootValidation.value}
+              </span>
+              <span style={previewLabelStyle}>Permutations</span>
+              <span
+                style={previewValueStyle}
+                data-testid="preview-total"
+              >
+                {previewPermutations.length}
+              </span>
+              <span style={previewLabelStyle}>Duration</span>
+              <span
+                style={previewValueStyle}
+                data-testid="preview-duration"
+              >
+                {previewDurationSeconds !== null
+                  ? formatDuration(previewDurationSeconds)
+                  : '—'}
+              </span>
+            </div>
+            <ul style={permutationListStyle} data-testid="preview-list">
+              {previewPermutations.map((perm, idx) => (
+                <li
+                  key={`${perm}-${idx}`}
+                  style={permutationChipStyle}
+                  data-testid="preview-chip"
+                >
+                  {perm}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <div style={dividerStyle} />
 
         <div style={actionsRowStyle}>
-          <span style={footerStyle}>Phase 5C · Invocation</span>
+          <span style={footerStyle}>ABULAFIA · Invocation</span>
           <button type="submit" style={invokeButtonStyle}>
             Invoke
           </button>

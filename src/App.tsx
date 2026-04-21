@@ -3,14 +3,23 @@ import type { CSSProperties } from 'react'
 import { SomaticHud } from './components/SomaticHud'
 import { StudyTemple } from './components/StudyTemple'
 import { PracticeBuilder } from './components/PracticeBuilder'
+import { RiteCompletion } from './components/RiteCompletion'
 import {
   advancePermutation,
   commitInvocation,
+  createCompletionSnapshot,
   createInitialSession,
+  isSessionComplete,
+  restartSession,
   type RitualSession,
 } from './session/ritualSession'
 
 type Mode = 'ritual' | 'study'
+
+type LastInvocation = {
+  root: string
+  repetitionCount: number
+}
 
 const BLACK = '#050505'
 const CYAN = '#00FFFF'
@@ -68,15 +77,21 @@ const layerStyle = (active: boolean): CSSProperties => ({
   zIndex: active ? 1 : 0,
   transition: 'opacity 320ms ease-out',
   overflow: 'auto',
-})
+}) satisfies CSSProperties
 
 function App() {
   const [mode, setMode] = useState<Mode>('ritual')
   const [session, setSession] = useState<RitualSession>(createInitialSession)
+  const [lastInvocation, setLastInvocation] = useState<LastInvocation | null>(
+    null,
+  )
+  const [completionDismissed, setCompletionDismissed] = useState(false)
 
   const handleInvoke = useCallback(
     (root: string, repetitionCount: number) => {
       setSession(commitInvocation(root, repetitionCount))
+      setLastInvocation({ root, repetitionCount })
+      setCompletionDismissed(false)
     },
     [],
   )
@@ -87,49 +102,93 @@ function App() {
     setSession((prev) => advancePermutation(prev))
   }, [])
 
+  const handleRepeat = useCallback(() => {
+    setSession((prev) => restartSession(prev))
+    setCompletionDismissed(false)
+  }, [])
+
+  const handleReinvoke = useCallback(() => {
+    setSession(createInitialSession())
+    setCompletionDismissed(false)
+  }, [])
+
+  const handleStayInChamber = useCallback(() => {
+    setCompletionDismissed(true)
+  }, [])
+
   const currentPermutation =
     session.invoked && session.permutations.length > 0
       ? session.permutations[session.permutationIndex]
       : undefined
+
+  const completionSnapshot = isSessionComplete(session)
+    ? createCompletionSnapshot(session)
+    : null
+  const showCompletion = completionSnapshot !== null && !completionDismissed
+
+  const ritualActive = mode === 'ritual'
+  const studyActive = mode === 'study'
 
   return (
     <div style={appStyle}>
       <nav style={modeBarStyle} aria-label="Mode">
         <button
           type="button"
-          style={modeButtonStyle(mode === 'ritual')}
-          aria-pressed={mode === 'ritual'}
+          style={modeButtonStyle(ritualActive)}
+          aria-pressed={ritualActive}
           onClick={() => setMode('ritual')}
         >
           Ritual
         </button>
         <button
           type="button"
-          style={modeButtonStyle(mode === 'study')}
-          aria-pressed={mode === 'study'}
+          style={modeButtonStyle(studyActive)}
+          aria-pressed={studyActive}
           onClick={() => setMode('study')}
         >
           Study
         </button>
       </nav>
 
-      <div style={layerStyle(mode === 'ritual')} aria-hidden={mode !== 'ritual'}>
+      <div
+        style={layerStyle(ritualActive)}
+        inert={!ritualActive}
+        data-testid="ritual-layer"
+      >
         {session.invoked ? (
-          <SomaticHud
-            permutation={currentPermutation}
-            permutationIndex={session.permutationIndex}
-            permutationTotal={session.permutations.length}
-            loopsCompleted={session.loopsCompleted}
-            repetitionCount={session.repetitionCount}
-            onBreathCycle={handleBreathCycle}
-          />
+          <>
+            <SomaticHud
+              permutation={currentPermutation}
+              permutationIndex={session.permutationIndex}
+              permutationTotal={session.permutations.length}
+              loopsCompleted={session.loopsCompleted}
+              repetitionCount={session.repetitionCount}
+              onBreathCycle={handleBreathCycle}
+            />
+            {showCompletion ? (
+              <RiteCompletion
+                snapshot={completionSnapshot}
+                onReinvoke={handleReinvoke}
+                onRepeat={handleRepeat}
+                onStay={handleStayInChamber}
+              />
+            ) : null}
+          </>
         ) : (
-          <PracticeBuilder onInvoke={handleInvoke} />
+          <PracticeBuilder
+            onInvoke={handleInvoke}
+            initialRoot={lastInvocation?.root ?? ''}
+            initialRepetitionCount={lastInvocation?.repetitionCount ?? 1}
+          />
         )}
       </div>
 
-      <div style={layerStyle(mode === 'study')} aria-hidden={mode !== 'study'}>
-        <StudyTemple active={mode === 'study'} />
+      <div
+        style={layerStyle(studyActive)}
+        inert={!studyActive}
+        data-testid="study-layer"
+      >
+        <StudyTemple active={studyActive} />
       </div>
     </div>
   )

@@ -3,9 +3,11 @@ import {
   advancePermutation,
   buildPermutationStrings,
   commitInvocation,
+  createCompletionSnapshot,
   createInitialSession,
   isBreathCycleEdge,
   isSessionComplete,
+  restartSession,
   validateRoot,
 } from './ritualSession'
 
@@ -132,5 +134,59 @@ describe('commitInvocation + advancePermutation', () => {
   it('is a no-op before invocation', () => {
     const s = createInitialSession()
     expect(advancePermutation(s)).toEqual(s)
+  })
+})
+
+describe('restartSession', () => {
+  it('zeros counters and preserves root, permutations, and repetitionCount', () => {
+    let s = commitInvocation('YHV', 2)
+    for (let i = 0; i < 8; i++) s = advancePermutation(s)
+    expect(s.loopsCompleted).toBeGreaterThan(0)
+    expect(s.permutationIndex).toBeGreaterThan(0)
+
+    const restarted = restartSession(s)
+    expect(restarted.root).toBe('YHV')
+    expect(restarted.permutations).toBe(s.permutations)
+    expect(restarted.repetitionCount).toBe(2)
+    expect(restarted.invoked).toBe(true)
+    expect(restarted.permutationIndex).toBe(0)
+    expect(restarted.loopsCompleted).toBe(0)
+  })
+
+  it('flips a complete session back to incomplete', () => {
+    let s = commitInvocation('YHV', 1)
+    for (let i = 0; i < 6; i++) s = advancePermutation(s)
+    expect(isSessionComplete(s)).toBe(true)
+    const restarted = restartSession(s)
+    expect(isSessionComplete(restarted)).toBe(false)
+  })
+
+  it('returns the same reference when session is not invoked', () => {
+    const s = createInitialSession()
+    expect(restartSession(s)).toBe(s)
+  })
+})
+
+describe('createCompletionSnapshot', () => {
+  it('returns null before invocation', () => {
+    expect(createCompletionSnapshot(createInitialSession())).toBeNull()
+  })
+
+  it('returns null mid-rite before completion', () => {
+    let s = commitInvocation('YHV', 2)
+    for (let i = 0; i < 3; i++) s = advancePermutation(s)
+    expect(createCompletionSnapshot(s)).toBeNull()
+  })
+
+  it('returns a structured snapshot on completion with finalPermutation === permutations.at(-1)', () => {
+    let s = commitInvocation('YHV', 1)
+    for (let i = 0; i < 6; i++) s = advancePermutation(s)
+    const snapshot = createCompletionSnapshot(s)
+    expect(snapshot).not.toBeNull()
+    expect(snapshot!.root).toBe('YHV')
+    expect(snapshot!.repetitionCount).toBe(1)
+    expect(snapshot!.totalPermutations).toBe(6)
+    expect(snapshot!.permutations).toBe(s.permutations)
+    expect(snapshot!.finalPermutation).toBe(s.permutations.at(-1))
   })
 })
