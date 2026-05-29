@@ -109,11 +109,25 @@ function factorial(n: number): number {
   return f
 }
 
-export type RitualGateProps = {
-  onBegin: (word: string) => void
+const studyLinkStyle: CSSProperties = {
+  backgroundColor: 'transparent',
+  border: 'none',
+  color: WHITE,
+  fontFamily: MONO,
+  fontSize: '10px',
+  letterSpacing: '0.4em',
+  textTransform: 'uppercase',
+  cursor: 'pointer',
+  padding: '6px 8px',
+  opacity: 0.35,
 }
 
-export function RitualGate({ onBegin }: RitualGateProps) {
+export type RitualGateProps = {
+  onBegin: (word: string) => void
+  onStudy?: () => void
+}
+
+export function RitualGate({ onBegin, onStudy }: RitualGateProps) {
   const [word, setWord] = useState('YHVH')
 
   const trimmed = word.replace(/\s/g, '').toUpperCase()
@@ -168,6 +182,12 @@ export function RitualGate({ onBegin }: RitualGateProps) {
         >
           Begin
         </button>
+
+        {onStudy && (
+          <button type="button" style={studyLinkStyle} onClick={onStudy}>
+            § Study the Method
+          </button>
+        )}
       </div>
     </div>
   )
