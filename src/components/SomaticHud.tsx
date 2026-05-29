@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { motion } from 'framer-motion'
-import { useMivta } from '../hooks/useMivta'
+import { usePractice } from '../hooks/usePractice'
+import { renderPermutation } from '../engines/permutationEngine'
 import type {
   BreathPhase,
   Direction,
@@ -39,10 +40,6 @@ const VOWEL_GLYPH: Record<Vowel, string> = {
   qubuts: 'U',
 }
 
-// Tetragrammaton fragment set — repeated 3× around the outer ring (12 glyphs).
-const TETRAGRAMMATON: readonly string[] = ['Y', 'H', 'V', 'H']
-
-const INNER_RING_COUNT = 8
 const OUTER_RING_COUNT = 12
 const INNER_RING_R = 22
 const OUTER_RING_R = 36
@@ -350,7 +347,7 @@ const devButtonDisabledStyle: CSSProperties = {
 
 const telemetryStyle: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
+  gridTemplateColumns: 'repeat(4, 1fr)',
   gap: '8px',
   paddingTop: '8px',
   fontFamily: MONO,
@@ -445,9 +442,18 @@ function cardinalMarker(
   return { x1, y1, x2, y2, nx: x2, ny: y2 }
 }
 
-export function SomaticHud() {
-  const { running, runtime, activeStep, progress, start, pause, reset, tick } =
-    useMivta()
+export type SomaticHudProps = {
+  inputWord?: string
+  onExit?: () => void
+}
+
+export function SomaticHud({ inputWord = 'YHVH', onExit }: SomaticHudProps) {
+  const practice = usePractice({ initialInput: inputWord })
+  const {
+    running, runtime, activeStep, progress, start, pause, reset, tick,
+    currentPermutation, currentLetter, letterIndex, lettersInPermutation,
+    permutationIndex, totalPermutations, isComplete,
+  } = practice
   const tickCounterRef = useRef<number | null>(null)
 
   const handleTick = () => {
@@ -458,11 +464,22 @@ export function SomaticHud() {
   }
 
   const phase = runtime.metronome.phase
-  const phaseText = phase === 'inhale' ? 'INHALE' : 'EXHALE'
+  const phaseText = isComplete
+    ? 'COMPLETE'
+    : phase === 'inhale'
+      ? 'INHALE'
+      : 'EXHALE'
   const p = Math.max(0, Math.min(1, progress))
   const direction = activeStep.direction
   const vowel = activeStep.vowel
-  const glyph = VOWEL_GLYPH[vowel]
+  const vowelGlyph = VOWEL_GLYPH[vowel]
+
+  // The operative letter being chanted — the core content of the practice.
+  const activeLetter = currentLetter?.char ?? ''
+  // The current permutation's rendered string for context display.
+  const permString = renderPermutation(currentPermutation)
+  // How many letters in this permutation — drives inner ring slot count.
+  const innerRingCount = currentPermutation.length || 1
 
   const { dx, dy } = directionTranslate(direction)
   const { sx, sy } = directionStretch(direction)
@@ -563,9 +580,8 @@ export function SomaticHud() {
   const fieldOpacity =
     phase === 'inhale' ? 0.35 + 0.25 * p : 0.55 + 0.4 * p
 
-  // Which ring index is aligned with the current cardinal direction?
+  // Outer ring highlights the glyph nearest the active cardinal direction.
   const activeAngle = cardinalAngle(direction)
-  const innerActiveIdx = activeRingIndex(INNER_RING_COUNT, activeAngle)
   const outerActiveIdx = activeRingIndex(OUTER_RING_COUNT, activeAngle)
 
   return (
@@ -700,13 +716,15 @@ export function SomaticHud() {
                     />
                   </g>
 
-                  {/* Outer letter ring — YHVH × 3, 12 glyphs at clockface positions.
+                  {/* Outer letter ring — current permutation letters repeated to fill 12 clockface positions.
                       Rotates clockwise with the cycle, locked to the outer orbital trace. */}
                   <g transform={`rotate(${ringAngleA} 50 50)`} opacity={fieldOpacity}>
                     {Array.from({ length: OUTER_RING_COUNT }).map((_, i) => {
                       const a = -Math.PI / 2 + (i * 2 * Math.PI) / OUTER_RING_COUNT
                       const pt = polarPoint(50, 50, OUTER_RING_R, a)
-                      const letter = TETRAGRAMMATON[i % TETRAGRAMMATON.length]
+                      const letter = currentPermutation.length > 0
+                        ? currentPermutation[i % currentPermutation.length].char
+                        : ''
                       const isActive = i === outerActiveIdx
                       return (
                         <text
@@ -743,28 +761,29 @@ export function SomaticHud() {
                     />
                   </g>
 
-                  {/* Inner letter ring — active vowel glyph × 8 at octagonal positions.
+                  {/* Inner letter ring — current permutation's letters at N positions.
+                      Active letter (letterIndex) highlighted cyan.
                       Counter-rotates, locked to the inner orbital trace. */}
                   <g transform={`rotate(${ringAngleB} 50 50)`} opacity={fieldOpacity}>
-                    {Array.from({ length: INNER_RING_COUNT }).map((_, i) => {
-                      const a = -Math.PI / 2 + (i * 2 * Math.PI) / INNER_RING_COUNT
+                    {currentPermutation.map((token, i) => {
+                      const a = -Math.PI / 2 + (i * 2 * Math.PI) / innerRingCount
                       const pt = polarPoint(50, 50, INNER_RING_R, a)
-                      const isActive = i === innerActiveIdx
+                      const isActive = i === letterIndex && !isComplete
                       return (
                         <text
-                          key={`inner-${i}`}
+                          key={`inner-${i}-${token.sourceIndex}`}
                           x={pt.x}
                           y={pt.y}
                           textAnchor="middle"
                           dominantBaseline="central"
                           fill={isActive ? CYAN : WHITE}
                           fontFamily={MONO}
-                          fontSize={4.5}
+                          fontSize={5}
                           fontWeight={500}
                           letterSpacing="0.08em"
-                          opacity={isActive ? 1 : 0.5}
+                          opacity={isActive ? 1 : 0.45}
                         >
-                          {glyph}
+                          {token.char}
                         </text>
                       )
                     })}
@@ -782,11 +801,11 @@ export function SomaticHud() {
                     opacity={binduAuraOpacity}
                   />
 
-                  {/* Bindu echo — offset cyan duplicate, exhale-only drop-shadow without filters. */}
-                  {phase === 'exhale' && (
+                  {/* Bindu echo — offset cyan duplicate, exhale-only. */}
+                  {phase === 'exhale' && activeLetter && (
                     <text
                       x={50.6}
-                      y={50.6}
+                      y={48.2}
                       textAnchor="middle"
                       dominantBaseline="central"
                       fill={CYAN}
@@ -796,14 +815,14 @@ export function SomaticHud() {
                       letterSpacing="0.08em"
                       opacity={binduEchoOpacity}
                     >
-                      {glyph}
+                      {activeLetter}
                     </text>
                   )}
 
-                  {/* Bindu sigil — the operative center. */}
+                  {/* Bindu sigil — the operative letter being chanted. */}
                   <text
                     x={50}
-                    y={50}
+                    y={48}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fill={WHITE}
@@ -812,8 +831,26 @@ export function SomaticHud() {
                     fontWeight={500}
                     letterSpacing="0.08em"
                   >
-                    {glyph}
+                    {isComplete ? '✓' : activeLetter}
                   </text>
+
+                  {/* Vowel glyph — secondary chanting instruction below the letter. */}
+                  {!isComplete && activeLetter && (
+                    <text
+                      x={50}
+                      y={56}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill={CYAN}
+                      fontFamily={MONO}
+                      fontSize={7}
+                      fontWeight={400}
+                      letterSpacing="0.12em"
+                      opacity={0.7}
+                    >
+                      {vowelGlyph}
+                    </text>
+                  )}
                 </svg>
               </div>
             </div>
@@ -850,6 +887,11 @@ export function SomaticHud() {
         </div>
 
         <div style={controlsRowStyle}>
+          {onExit && (
+            <button type="button" style={devButtonStyle} onClick={onExit}>
+              Exit
+            </button>
+          )}
           <button type="button" style={devButtonStyle} onClick={start}>
             Start
           </button>
@@ -872,21 +914,27 @@ export function SomaticHud() {
 
         <div style={telemetryStyle} aria-label="Telemetry">
           <div style={telemetryCellStyle}>
+            <span style={telemetryKeyStyle}>perm</span>
+            <span style={telemetryValueStyle}>
+              {permutationIndex + 1}/{totalPermutations}
+            </span>
+          </div>
+          <div style={telemetryCellStyle}>
+            <span style={telemetryKeyStyle}>letter</span>
+            <span style={telemetryValueStyle}>
+              {isComplete ? '—' : `${letterIndex + 1}/${lettersInPermutation}`}
+            </span>
+          </div>
+          <div style={telemetryCellStyle}>
+            <span style={telemetryKeyStyle}>perm</span>
+            <span style={telemetryValueStyle}>
+              {permString}
+            </span>
+          </div>
+          <div style={telemetryCellStyle}>
             <span style={telemetryKeyStyle}>cycle</span>
             <span style={telemetryValueStyle}>
               {runtime.metronome.cycleCount}
-            </span>
-          </div>
-          <div style={telemetryCellStyle}>
-            <span style={telemetryKeyStyle}>index</span>
-            <span style={telemetryValueStyle}>
-              {runtime.metronome.activeIndex}
-            </span>
-          </div>
-          <div style={telemetryCellStyle}>
-            <span style={telemetryKeyStyle}>elapsed ms</span>
-            <span style={telemetryValueStyle}>
-              {Math.round(runtime.metronome.phaseElapsedMs)}
             </span>
           </div>
         </div>
