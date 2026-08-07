@@ -136,6 +136,40 @@ describe('SomaticHud', () => {
     expect(screen.queryByText(/Intone/)).toBeNull()
   })
 
+  it('closes the rite with the completion overlay', () => {
+    const { clock, advanceTo } = makeClock()
+    render(<SomaticHud inputWord="YHVH" clock={clock} />)
+    begin(advanceTo)
+    advanceTo(24 * 4 * 5 * 8000)
+
+    expect(screen.getByRole('status').textContent).toContain('The Rite is Complete')
+    expect(screen.getByLabelText('The name YHVH, reassembled')).toBeTruthy()
+  })
+
+  it('stops the metronome once the rite is complete', () => {
+    const { clock, advanceTo } = makeClock()
+    render(<SomaticHud inputWord="YHVH" clock={clock} />)
+    begin(advanceTo)
+    advanceTo(24 * 4 * 5 * 8000)
+
+    // The rite ends itself; the clock must not keep running behind the overlay.
+    expect(screen.getByRole('button', { name: /^begin$/i })).toBeTruthy()
+  })
+
+  it('returns to the first arrangement when asked to begin again', () => {
+    const { clock, advanceTo } = makeClock()
+    render(<SomaticHud inputWord="YHVH" clock={clock} />)
+    begin(advanceTo)
+    advanceTo(24 * 4 * 5 * 8000)
+
+    fireEvent.click(screen.getByRole('button', { name: /begin again/i }))
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(position().textContent).toContain('1/24')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Inhale')
+    expect(screen.getByRole('button', { name: /^pause$/i })).toBeTruthy()
+  })
+
   it('exposes breath progress to assistive technology', () => {
     const { clock, advanceTo } = makeClock()
     render(<SomaticHud inputWord="YHVH" clock={clock} />)
@@ -192,7 +226,6 @@ describe('SomaticHud', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /\+ dev/i }))
     expect(screen.getByRole('button', { name: /reset/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /tick/i })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /− dev/i }))
     expect(screen.queryByRole('button', { name: /reset/i })).toBeNull()

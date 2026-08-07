@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { usePractice, type UsePracticeOptions } from '../hooks/usePractice'
 import { useAudio } from '../hooks/useAudio'
 import { ParticleField } from './ParticleField'
+import { RiteCompletion } from './RiteCompletion'
 import { renderPermutation } from '../engines/permutationEngine'
 import type { BreathPhase, Direction, Vowel } from '../engines/metronomeEngine'
 import { ACCENT, FONT_OPERATIVE, LUX } from '../theme/tokens'
@@ -63,7 +64,6 @@ export function SomaticHud({
     start,
     pause,
     reset,
-    tick,
     currentPermutation,
     currentLetter,
     letterIndex,
@@ -75,14 +75,6 @@ export function SomaticHud({
 
   const audio = useAudio()
   const [showDev, setShowDev] = useState(false)
-  const tickCounterRef = useRef<number | null>(null)
-
-  const handleTick = () => {
-    const baseline = runtime.lastNowMs ?? 0
-    const current = tickCounterRef.current ?? baseline
-    tickCounterRef.current = Math.max(current, baseline) + 1000
-    tick(tickCounterRef.current)
-  }
 
   const phase = runtime.metronome.phase
   const phaseText = isComplete ? 'Complete' : phase === 'inhale' ? 'Inhale' : 'Exhale'
@@ -134,6 +126,18 @@ export function SomaticHud({
   useEffect(() => {
     audio.setBreath(phase, p, vowel)
   }, [audio, phase, p, vowel])
+
+  // The rite ends itself. Leaving the metronome running past the final
+  // arrangement would keep the clock advancing behind a chamber that has
+  // nothing left to show.
+  useEffect(() => {
+    if (isComplete && running) pause()
+  }, [isComplete, running, pause])
+
+  const handleBeginAgain = () => {
+    reset()
+    start()
+  }
 
   // ── Ignition ────────────────────────────────────────────────────────────
   const [ignited, setIgnited] = useState(false)
@@ -651,12 +655,6 @@ export function SomaticHud({
           </p>
         )}
 
-        {isComplete && (
-          <p className="font-prose lux m-0 text-center text-base italic">
-            All {totalPermutations.toLocaleString()} permutations are complete.
-          </p>
-        )}
-
         <hr className="star-rule w-full max-w-[42rem] opacity-40" />
 
         {/* Position within the rite. */}
@@ -770,15 +768,6 @@ export function SomaticHud({
             <button type="button" className="ritual-action text-[0.55rem]" onClick={reset}>
               Reset
             </button>
-            <button
-              type="button"
-              className="ritual-action text-[0.55rem]"
-              onClick={handleTick}
-              disabled={!running}
-              title="Running-only: advances runtime by 1000ms via hook tick()"
-            >
-              Tick +1000ms
-            </button>
             <span
               className="font-numeric lux-dim text-[0.55rem]"
               style={{ letterSpacing: '0.2em' }}
@@ -788,6 +777,17 @@ export function SomaticHud({
           </div>
         )}
       </section>
+
+      {isComplete && (
+        <RiteCompletion
+          inputWord={inputWord}
+          totalPermutations={totalPermutations}
+          lettersPerPermutation={lettersInPermutation}
+          finalPermutation={currentPermutation}
+          onBeginAgain={handleBeginAgain}
+          onExit={onExit}
+        />
+      )}
     </div>
   )
 }
