@@ -35,7 +35,6 @@ export const LINE = 'rgba(210,225,240,0.18)'
  * depends on the practitioner knowing exactly which letter is being chanted.
  */
 export const FONT_DISPLAY = "'UnifrakturCook', 'UnifrakturMaguntia', cursive"
-export const FONT_MEDIUM = "'Pirata One', serif"
 export const FONT_LABEL = "'Cinzel', serif"
 export const FONT_PROSE = "'IM Fell English', Georgia, serif"
 export const FONT_NUMERIC = "'JetBrains Mono', ui-monospace, monospace"

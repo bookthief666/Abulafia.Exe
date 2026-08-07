@@ -10,11 +10,23 @@
       content="A cognitive disassembly engine based on 13th-century Ecstatic Kabbalah. Permute the letters of a name and breathe each one through five gates of vowel and direction."
     />
     <title>ABULAFIA.EXE</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fonts are vendored under /fonts and declared in src/theme/fonts.css,
+         so the chamber renders in its own typography with no network round
+         trip and no flash of fallback serif. The two faces that carry its
+         identity are fetched up front. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=IM+Fell+English:ital@0;1&family=JetBrains+Mono:wght@300;400;500;600&family=Petit+Formal+Script&family=Pirata+One&family=UnifrakturCook:wght@700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/cinzel-400-latin.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/unifrakturcook-700-latin.woff2"
+      crossorigin
     />
   </head>
   <body>

@@ -32,7 +32,6 @@
   --line: rgba(210, 225, 240, 0.18);
 
   --font-display: 'UnifrakturCook', 'UnifrakturMaguntia', cursive;
-  --font-medium: 'Pirata One', serif;
   --font-label: 'Cinzel', serif;
   --font-prose: 'IM Fell English', Georgia, serif;
   --font-numeric: 'JetBrains Mono', ui-monospace, monospace;
@@ -181,9 +180,6 @@ body {
 
 .font-display {
   font-family: var(--font-display);
-}
-.font-medium-display {
-  font-family: var(--font-medium);
 }
 .font-label {
   font-family: var(--font-label);
