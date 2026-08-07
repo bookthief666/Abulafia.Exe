@@ -1,134 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { usePractice } from '../hooks/usePractice'
+import { usePractice, type UsePracticeOptions } from '../hooks/usePractice'
 import { useAudio } from '../hooks/useAudio'
 import { ParticleField } from './ParticleField'
 import { renderPermutation } from '../engines/permutationEngine'
 import type { BreathPhase, Direction, Vowel } from '../engines/metronomeEngine'
 import { ACCENT, FONT_OPERATIVE, LUX } from '../theme/tokens'
+import {
+  CARDINALS,
+  DIRECTION_CUE,
+  VOWEL_GLYPH,
+  activeRingIndex,
+  cardinalAngle,
+  cardinalUnit,
+  directionStretch,
+  directionTranslate,
+  octagonPoints,
+  polarPoint,
+  syllableFor,
+  type Cardinal,
+} from './chamberGeometry'
 
 const DIRECTIONS: readonly Direction[] = ['up', 'right', 'down', 'left', 'forward']
 const VOWELS: readonly Vowel[] = ['holam', 'qamatz', 'hiriq', 'tzere', 'qubuts']
 
-/** Standard Hebrew / Abulafian operational phonetic mapping. */
-const VOWEL_GLYPH: Record<Vowel, string> = {
-  holam: 'O',
-  qamatz: 'A',
-  hiriq: 'I',
-  tzere: 'E',
-  qubuts: 'U',
-}
-
-/**
- * How each direction is described to the practitioner. The somatic mapping is
- * a bodily instruction, not a label, so it is phrased as one.
- */
-const DIRECTION_CUE: Record<Direction, string> = {
-  up: 'Rising',
-  right: 'Rightward',
-  down: 'Descending',
-  left: 'Leftward',
-  forward: 'Inward',
-}
-
 const OUTER_RING_COUNT = 12
 const INNER_RING_R = 22
 const OUTER_RING_R = 36
-
-/** Eight vertices around (50,50) at radius r, pointy-top. */
-function octagonPoints(r: number): string {
-  const pts: string[] = []
-  for (let i = 0; i < 8; i++) {
-    const a = -Math.PI / 2 + (i * Math.PI) / 4
-    pts.push(`${(50 + r * Math.cos(a)).toFixed(3)},${(50 + r * Math.sin(a)).toFixed(3)}`)
-  }
-  return pts.join(' ')
-}
-
-function polarPoint(cx: number, cy: number, r: number, angleRad: number) {
-  return { x: cx + r * Math.cos(angleRad), y: cy + r * Math.sin(angleRad) }
-}
-
-/** Cardinal direction to SVG angle (radians), screen-y pointing down. */
-function cardinalAngle(d: Direction): number | null {
-  switch (d) {
-    case 'up':
-      return -Math.PI / 2
-    case 'right':
-      return 0
-    case 'down':
-      return Math.PI / 2
-    case 'left':
-      return Math.PI
-    case 'forward':
-    default:
-      return null
-  }
-}
-
-/** Index of the evenly spaced ring slot nearest an angle, or -1 for none. */
-function activeRingIndex(count: number, targetAngle: number | null): number {
-  if (targetAngle === null) return -1
-  let best = 0
-  let bestDelta = Infinity
-  for (let i = 0; i < count; i++) {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / count
-    let delta =
-      Math.abs(((a - targetAngle) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
-    if (delta > Math.PI) delta = 2 * Math.PI - delta
-    if (delta < bestDelta) {
-      bestDelta = delta
-      best = i
-    }
-  }
-  return best
-}
-
-function directionTranslate(d: Direction): { dx: string; dy: string } {
-  switch (d) {
-    case 'up':
-      return { dx: '0', dy: '-5vmin' }
-    case 'down':
-      return { dx: '0', dy: '5vmin' }
-    case 'left':
-      return { dx: '-5vmin', dy: '0' }
-    case 'right':
-      return { dx: '5vmin', dy: '0' }
-    case 'forward':
-    default:
-      return { dx: '0', dy: '0' }
-  }
-}
-
-function directionStretch(d: Direction): { sx: number; sy: number } {
-  switch (d) {
-    case 'up':
-    case 'down':
-      return { sx: 0.96, sy: 1.06 }
-    case 'left':
-    case 'right':
-      return { sx: 1.06, sy: 0.96 }
-    case 'forward':
-    default:
-      return { sx: 1, sy: 1 }
-  }
-}
-
-type Cardinal = 'up' | 'right' | 'down' | 'left'
-const CARDINALS: readonly Cardinal[] = ['up', 'right', 'down', 'left']
-
-function cardinalUnit(c: Cardinal): { ux: number; uy: number } {
-  switch (c) {
-    case 'up':
-      return { ux: 0, uy: -1 }
-    case 'right':
-      return { ux: 1, uy: 0 }
-    case 'down':
-      return { ux: 0, uy: 1 }
-    case 'left':
-      return { ux: -1, uy: 0 }
-  }
-}
 
 function prefersReducedMotion(): boolean {
   return (
@@ -141,10 +39,22 @@ function prefersReducedMotion(): boolean {
 export type SomaticHudProps = {
   inputWord?: string
   onExit?: () => void
+  /**
+   * Clock and frame-scheduling overrides, forwarded to `usePractice`.
+   *
+   * The metronome layer is deliberately clock-agnostic — see `useMivta` — and
+   * this keeps that seam reachable from the outside, so a test can drive the
+   * breath to an exact phase instead of waiting eight seconds for it.
+   */
+  clock?: Pick<UsePracticeOptions, 'now' | 'scheduleFrame' | 'cancelFrame'>
 }
 
-export function SomaticHud({ inputWord = 'YHVH', onExit }: SomaticHudProps) {
-  const practice = usePractice({ initialInput: inputWord })
+export function SomaticHud({
+  inputWord = 'YHVH',
+  onExit,
+  clock,
+}: SomaticHudProps) {
+  const practice = usePractice({ initialInput: inputWord, ...clock })
   const {
     running,
     runtime,
@@ -186,7 +96,7 @@ export function SomaticHud({ inputWord = 'YHVH', onExit }: SomaticHudProps) {
   const innerRingCount = currentPermutation.length || 1
 
   /** The literal thing to chant: letter fused with its vowel. */
-  const syllable = activeLetter ? `${activeLetter}${vowelGlyph}` : ''
+  const syllable = syllableFor(activeLetter, vowel)
 
   const { dx, dy } = directionTranslate(direction)
   const { sx, sy } = directionStretch(direction)
@@ -753,14 +663,27 @@ export function SomaticHud({ inputWord = 'YHVH', onExit }: SomaticHudProps) {
         <div
           className="font-numeric lux-dim flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[0.6rem]"
           style={{ letterSpacing: '0.22em' }}
+          role="group"
           aria-label="Position"
         >
-          <span>
-            <span className="opacity-50">perm </span>
+          <span
+            aria-label={`Permutation ${permutationIndex + 1} of ${totalPermutations}`}
+          >
+            <span aria-hidden="true" className="opacity-50">
+              perm{' '}
+            </span>
             {permutationIndex + 1}/{totalPermutations}
           </span>
-          <span>
-            <span className="opacity-50">letter </span>
+          <span
+            aria-label={
+              isComplete
+                ? 'All letters worked'
+                : `Letter ${letterIndex + 1} of ${lettersInPermutation}`
+            }
+          >
+            <span aria-hidden="true" className="opacity-50">
+              letter{' '}
+            </span>
             {isComplete ? '—' : `${letterIndex + 1}/${lettersInPermutation}`}
           </span>
           <span className="font-operative" style={{ letterSpacing: '0.3em' }}>
