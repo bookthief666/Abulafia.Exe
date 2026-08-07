@@ -1,45 +1,9 @@
 import { useState } from 'react'
-import type { CSSProperties } from 'react'
 import { SomaticHud } from './components/SomaticHud'
 import { RitualGate } from './components/RitualGate'
 import { StudyTemple } from './components/StudyTemple'
 
 type AppMode = 'gate' | 'ritual' | 'study'
-
-const MONO =
-  "ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, 'Courier New', monospace"
-
-const appStyle: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  backgroundColor: '#050505',
-  overflow: 'auto',
-}
-
-const navStyle: CSSProperties = {
-  position: 'fixed',
-  top: 'clamp(8px, 1.5vmin, 16px)',
-  right: 'clamp(8px, 1.5vmin, 16px)',
-  zIndex: 100,
-  display: 'flex',
-  gap: '12px',
-  fontFamily: MONO,
-  fontSize: '9px',
-  letterSpacing: '0.4em',
-  textTransform: 'uppercase',
-}
-
-const navButtonStyle: CSSProperties = {
-  backgroundColor: 'transparent',
-  border: 'none',
-  color: 'rgba(255,255,255,0.35)',
-  fontFamily: MONO,
-  fontSize: '9px',
-  letterSpacing: '0.4em',
-  textTransform: 'uppercase',
-  cursor: 'pointer',
-  padding: '6px 8px',
-}
 
 function App() {
   const [mode, setMode] = useState<AppMode>('gate')
@@ -50,51 +14,53 @@ function App() {
     setMode('ritual')
   }
 
-  const handleExit = () => {
-    setMode('gate')
-  }
-
   return (
-    <div style={appStyle}>
+    <div className="fixed inset-0 overflow-auto">
+      {/* Atmosphere. Pointer-inert, behind everything, cheap: two static
+          layers plus one slow-drifting starfield. */}
+      <div aria-hidden="true" className="starfield-layer" />
+      <div aria-hidden="true" className="grain-layer" />
+      <div aria-hidden="true" className="vignette-layer" />
+
       {mode !== 'gate' && (
-        <nav style={navStyle}>
-          {mode === 'study' && (
-            <button
-              type="button"
-              style={navButtonStyle}
-              onClick={() => setMode('gate')}
-            >
-              Gate
-            </button>
-          )}
-          {mode === 'ritual' && (
-            <button
-              type="button"
-              style={navButtonStyle}
-              onClick={() => setMode('study')}
-            >
-              Study
-            </button>
-          )}
-          {mode === 'study' && (
-            <button
-              type="button"
-              style={navButtonStyle}
-              onClick={() => setMode('ritual')}
-            >
-              Ritual
-            </button>
-          )}
+        <nav
+          className="fixed z-100 flex gap-1"
+          style={{
+            top: 'calc(var(--safe-top) + clamp(6px, 1.5vmin, 14px))',
+            right: 'clamp(6px, 1.5vmin, 14px)',
+          }}
+        >
+          <button
+            type="button"
+            className="ritual-action text-[0.58rem]"
+            onClick={() => setMode('gate')}
+          >
+            Gate
+          </button>
+          <button
+            type="button"
+            className="ritual-action text-[0.58rem]"
+            style={mode === 'study' ? { opacity: 1 } : undefined}
+            onClick={() => setMode(mode === 'study' ? 'ritual' : 'study')}
+          >
+            {mode === 'study' ? 'Ritual' : 'Study'}
+          </button>
         </nav>
       )}
 
-      {mode === 'gate' && (
-        <RitualGate onBegin={handleBegin} onStudy={() => setMode('study')} />
-      )}
-      {mode === 'ritual' && (
-        <SomaticHud key={inputWord} inputWord={inputWord} onExit={handleExit} />
-      )}
-      {mode === 'study' && <StudyTemple active={true} />}
+      <div className="relative z-1">
+        {mode === 'gate' && (
+          <RitualGate onBegin={handleBegin} onStudy={() => setMode('study')} />
+        )}
+        {mode === 'ritual' && (
+          <SomaticHud
+            key={inputWord}
+            inputWord={inputWord}
+            onExit={() => setMode('gate')}
+          />
+        )}
+        {mode === 'study' && <StudyTemple active={true} />}
+      </div>
     </div>
   )
 }

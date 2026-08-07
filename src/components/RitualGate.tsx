@@ -1,107 +1,5 @@
 import { useState } from 'react'
-import type { CSSProperties } from 'react'
-const BLACK = '#050505'
-const WHITE = '#FFFFFF'
-const CYAN = '#00FFFF'
-const MONO =
-  "ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, 'Courier New', monospace"
-
-const rootStyle: CSSProperties = {
-  backgroundColor: BLACK,
-  color: WHITE,
-  fontFamily: MONO,
-  minHeight: '100dvh',
-  width: '100%',
-  boxSizing: 'border-box',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  position: 'relative',
-}
-
-const frameStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: 'clamp(16px, 3vmin, 32px)',
-  padding: 'clamp(24px, 5vmin, 64px)',
-  maxWidth: 'clamp(300px, 60vmin, 480px)',
-  width: '100%',
-  boxSizing: 'border-box',
-}
-
-const titleStyle: CSSProperties = {
-  fontFamily: MONO,
-  fontSize: 'clamp(20px, 4vmin, 36px)',
-  fontWeight: 500,
-  letterSpacing: '0.36em',
-  textTransform: 'uppercase',
-  color: WHITE,
-  margin: 0,
-  textAlign: 'center',
-}
-
-const subtitleStyle: CSSProperties = {
-  fontFamily: MONO,
-  fontSize: '10px',
-  letterSpacing: '0.5em',
-  textTransform: 'uppercase',
-  color: CYAN,
-  opacity: 0.6,
-  margin: 0,
-}
-
-const inputStyle: CSSProperties = {
-  backgroundColor: 'transparent',
-  border: 'none',
-  borderBottom: `1px solid rgba(255,255,255,0.35)`,
-  color: WHITE,
-  fontFamily: MONO,
-  fontSize: 'clamp(28px, 6vmin, 56px)',
-  fontWeight: 500,
-  letterSpacing: '0.4em',
-  textTransform: 'uppercase',
-  textAlign: 'center',
-  padding: 'clamp(8px, 1.5vmin, 16px) 0',
-  outline: 'none',
-  width: '100%',
-  boxSizing: 'border-box',
-}
-
-const statsStyle: CSSProperties = {
-  fontFamily: MONO,
-  fontSize: '11px',
-  letterSpacing: '0.3em',
-  textTransform: 'uppercase',
-  color: WHITE,
-  opacity: 0.4,
-  textAlign: 'center',
-}
-
-const warningStyle: CSSProperties = {
-  ...statsStyle,
-  color: CYAN,
-  opacity: 0.7,
-}
-
-const beginButtonStyle: CSSProperties = {
-  backgroundColor: 'transparent',
-  border: `1px solid ${WHITE}`,
-  color: WHITE,
-  fontFamily: MONO,
-  fontSize: '13px',
-  letterSpacing: '0.4em',
-  textTransform: 'uppercase',
-  padding: 'clamp(12px, 2vmin, 18px) clamp(32px, 6vmin, 64px)',
-  cursor: 'pointer',
-  transition: 'border-color 200ms ease-out, color 200ms ease-out',
-}
-
-const beginButtonDisabledStyle: CSSProperties = {
-  ...beginButtonStyle,
-  opacity: 0.25,
-  cursor: 'not-allowed',
-}
+import { ORNAMENT } from '../theme/tokens'
 
 function factorial(n: number): number {
   let f = 1
@@ -109,17 +7,17 @@ function factorial(n: number): number {
   return f
 }
 
-const studyLinkStyle: CSSProperties = {
-  backgroundColor: 'transparent',
-  border: 'none',
-  color: WHITE,
-  fontFamily: MONO,
-  fontSize: '10px',
-  letterSpacing: '0.4em',
-  textTransform: 'uppercase',
-  cursor: 'pointer',
-  padding: '6px 8px',
-  opacity: 0.35,
+const MAX_LETTERS = 7
+
+/** Five vowel gates per letter; each gate is one inhale and one exhale. */
+const GATES_PER_LETTER = 5
+const SECONDS_PER_GATE = 8
+
+function formatDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.round((totalSeconds % 3600) / 60)
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes} min`
 }
 
 export type RitualGateProps = {
@@ -133,61 +31,114 @@ export function RitualGate({ onBegin, onStudy }: RitualGateProps) {
   const trimmed = word.replace(/\s/g, '').toUpperCase()
   const len = trimmed.length
   const permCount = len > 0 ? factorial(len) : 0
-  const totalCycles = permCount * len
-  const tooLong = len > 7
+  const totalBreaths = permCount * len * GATES_PER_LETTER
+  const estimate = formatDuration(totalBreaths * SECONDS_PER_GATE)
+  const tooLong = len > MAX_LETTERS
+  const ready = len > 0 && !tooLong
 
   const handleSubmit = () => {
-    if (len > 0 && !tooLong) {
-      onBegin(trimmed)
-    }
+    if (ready) onBegin(trimmed)
   }
 
   return (
-    <div style={rootStyle}>
-      <div style={frameStyle}>
-        <h1 style={titleStyle}>Abulafia.exe</h1>
-        <p style={subtitleStyle}>Tzeruf Ha-Otiot</p>
+    <div className="relative flex min-h-[100dvh] w-full items-center justify-center px-4 py-10">
+      <div
+        className="flex w-full max-w-[34rem] flex-col items-center gap-6 text-center"
+        style={{ animation: 'fadeIn 1.6s ease-out' }}
+      >
+        <p
+          className="font-label latin-caps lux-accent text-[0.62rem]"
+          style={{ letterSpacing: '0.42em', animation: 'fadeInUp 1s ease-out both' }}
+        >
+          Tzeruf Ha-Otiot
+        </p>
 
-        <input
-          type="text"
-          value={word}
-          onChange={(e) => setWord(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
-          style={inputStyle}
-          placeholder="YHVH"
-          maxLength={8}
-          autoFocus
-          spellCheck={false}
-          autoComplete="off"
-          aria-label="Word to permute"
-        />
+        <h1
+          className="font-display charged m-0 text-[clamp(2.6rem,10vw,4.75rem)] leading-[1.05]"
+          style={{ animation: 'fadeInUp 1s ease-out 0.15s both' }}
+        >
+          Abulafia.exe
+        </h1>
 
-        {len > 0 && !tooLong && (
-          <div style={statsStyle}>
-            {len} letters · {permCount} permutations · {totalCycles} breath cycles
-          </div>
+        <hr className="star-rule w-56" />
+
+        <p
+          className="font-prose lux-dim m-0 max-w-[30rem] text-[clamp(0.9rem,2.4vw,1.05rem)] leading-relaxed"
+          style={{ animation: 'fadeInUp 1s ease-out 0.3s both' }}
+        >
+          Enter a name. The engine shatters it into every arrangement of its
+          letters, and you breathe each letter through five gates of vowel and
+          direction — one inhale to gather, one exhale to sound it.
+        </p>
+
+        <div
+          className="mt-2 w-full"
+          style={{ animation: 'fadeInUp 1s ease-out 0.45s both' }}
+        >
+          <label
+            htmlFor="ritual-word"
+            className="font-label latin-caps lux-dim block text-[0.58rem]"
+            style={{ letterSpacing: '0.4em' }}
+          >
+            The Name
+          </label>
+          <input
+            id="ritual-word"
+            type="text"
+            value={word}
+            onChange={(e) => setWord(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSubmit()
+            }}
+            className="font-operative lux mt-3 w-full border-0 bg-transparent text-center text-[clamp(2rem,9vw,3.25rem)] uppercase outline-none"
+            style={{ letterSpacing: '0.34em', textIndent: '0.34em' }}
+            placeholder="YHVH"
+            maxLength={MAX_LETTERS + 1}
+            autoFocus
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <hr className="charge-rule mt-1 w-full" style={{ opacity: ready ? 0.9 : 0.3 }} />
+        </div>
+
+        {ready && (
+          <p className="font-numeric lux-dim m-0 text-[0.68rem]" style={{ letterSpacing: '0.2em' }}>
+            {permCount.toLocaleString()} permutations ·{' '}
+            {totalBreaths.toLocaleString()} breaths · {estimate} unbroken
+          </p>
         )}
 
         {tooLong && (
-          <div style={warningStyle}>
-            7 letters max ({factorial(8).toLocaleString()} permutations would be impractical)
-          </div>
+          <p className="font-numeric lux-accent m-0 text-[0.68rem]" style={{ letterSpacing: '0.2em' }}>
+            {MAX_LETTERS} letters maximum — {factorial(8).toLocaleString()} permutations
+            would exceed a practicable rite
+          </p>
         )}
 
-        <button
-          type="button"
-          style={len > 0 && !tooLong ? beginButtonStyle : beginButtonDisabledStyle}
-          disabled={len === 0 || tooLong}
-          onClick={handleSubmit}
+        <div
+          className="mt-2 flex flex-col items-center gap-1"
+          style={{ animation: 'fadeInUp 1s ease-out 0.6s both' }}
         >
-          Begin
-        </button>
-
-        {onStudy && (
-          <button type="button" style={studyLinkStyle} onClick={onStudy}>
-            § Study the Method
+          <button
+            type="button"
+            className="ritual-action lux-accent text-[0.82rem]"
+            style={{ letterSpacing: '0.3em', opacity: ready ? 1 : 0.3 }}
+            disabled={!ready}
+            onClick={handleSubmit}
+          >
+            ✦ Begin the Rite ✦
           </button>
-        )}
+
+          {onStudy && (
+            <button type="button" className="ritual-action text-[0.62rem]" onClick={onStudy}>
+              Study the Method
+            </button>
+          )}
+        </div>
+
+        <p className="font-display lux-dim m-0 text-sm opacity-40" aria-hidden="true">
+          {ORNAMENT}
+        </p>
       </div>
     </div>
   )
