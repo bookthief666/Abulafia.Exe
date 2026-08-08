@@ -62,7 +62,9 @@ body {
     var(--void) 55%,
     var(--void-deep) 100%
   );
-  background-attachment: fixed;
+  /* Deliberately not `background-attachment: fixed`. The app root is itself
+     `position: fixed` and owns the scroll, so a fixed attachment buys nothing
+     and forces a full-viewport repaint on every scroll frame on Android. */
   font-family: var(--font-prose);
 }
 
@@ -435,7 +437,10 @@ html[data-effects='low'] .starfield-layer {
 html[data-effects='low'] .grain-layer {
   opacity: 0.035;
 }
-html[data-effects='low'] canvas {
+/* The field also thins its own density and drops streaks when this is set —
+   see ParticleField. This is the visual half of the same contract. */
+html[data-effects='low'] canvas,
+html[data-effects='low'] .particle-field {
   opacity: 0.4 !important;
   filter: none !important;
 }

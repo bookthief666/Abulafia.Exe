@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { usePractice, type UsePracticeOptions } from '../hooks/usePractice'
 import { useAudio } from '../hooks/useAudio'
-import { ParticleField } from './ParticleField'
+import { pulseField, resetField, setFieldState } from './fieldSignal'
 import { RiteCompletion } from './RiteCompletion'
 import { renderPermutation } from '../engines/permutationEngine'
 import type { BreathPhase, Direction, Vowel } from '../engines/metronomeEngine'
@@ -106,7 +106,12 @@ export function SomaticHud({
     if (phase !== prevPhaseRef.current) {
       prevPhaseRef.current = phase
       setFlipCount((n) => n + 1)
-      if (phase === 'exhale') audio.strikeBell()
+      if (phase === 'exhale') {
+        audio.strikeBell()
+        // Let the turn of the breath move the room, not just the ring drawn
+        // over it.
+        pulseField()
+      }
       if (snapTimeoutRef.current != null) clearTimeout(snapTimeoutRef.current)
       setSnap(true)
       snapTimeoutRef.current = setTimeout(() => {
@@ -126,6 +131,22 @@ export function SomaticHud({
   useEffect(() => {
     audio.setBreath(phase, p, vowel)
   }, [audio, phase, p, vowel])
+
+  // Publish the rite to the atmosphere. The field renders above this component
+  // in the tree and reads the signal inside its own animation loop, so nothing
+  // here causes a re-render. Leaving the chamber returns the field to rest.
+  useEffect(() => {
+    setFieldState({
+      mode: 'ritual',
+      phase,
+      progress: p,
+      direction,
+      permutationIndex,
+      isComplete,
+    })
+  }, [phase, p, direction, permutationIndex, isComplete])
+
+  useEffect(() => resetField, [])
 
   // The rite ends itself. Leaving the metronome running past the final
   // arrangement would keep the clock advancing behind a chamber that has
@@ -273,8 +294,6 @@ export function SomaticHud({
 
       {/* ── Centre: the ritual core ─────────────────────────────────────── */}
       <section className="relative z-1 flex min-h-0 flex-1 items-center justify-center isolate">
-        <ParticleField phase={phase} progress={p} />
-
         {/* Phase-flip shockwave. Keyed so each flip replays from zero. */}
         {!reduced && flipCount > 0 && (
           <div
