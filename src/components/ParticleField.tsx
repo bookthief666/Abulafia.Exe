@@ -25,7 +25,14 @@ import { cardinalUnit, type Cardinal } from './chamberGeometry'
  * the animation.
  */
 
-const MAX_PARTICLES = 220
+/**
+ * Ceiling on mote count. Density is otherwise area-derived, and this cap binds
+ * only on large viewports — the Fold's inner display is roughly twelve times
+ * the area of its cover screen, so too low a ceiling leaves the unfolded field
+ * looking abandoned. Link cost is near-linear in this number thanks to the
+ * spatial hash, so the ceiling can be generous.
+ */
+const MAX_PARTICLES = 340
 const LINK_DISTANCE = 116
 const LINK_DISTANCE_SQ = LINK_DISTANCE * LINK_DISTANCE
 const SPRING = 0.014
